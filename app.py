@@ -137,12 +137,15 @@ def inject_css():
 
 @st.cache_resource(ttl=600)
 def get_bq_client():
-    if "gcp_service_account" in st.secrets:
-        credentials = service_account.Credentials.from_service_account_info(
-            st.secrets["gcp_service_account"],
-            scopes=["https://www.googleapis.com/auth/bigquery"],
-        )
-        return bigquery.Client(project=BQ_PROJECT, credentials=credentials)
+    try:
+        if st.secrets and "gcp_service_account" in st.secrets:
+            credentials = service_account.Credentials.from_service_account_info(
+                st.secrets["gcp_service_account"],
+                scopes=["https://www.googleapis.com/auth/bigquery"],
+            )
+            return bigquery.Client(project=BQ_PROJECT, credentials=credentials)
+    except Exception:
+        pass
     return bigquery.Client(project=BQ_PROJECT)
 
 
