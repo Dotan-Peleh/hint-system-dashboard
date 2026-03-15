@@ -1124,46 +1124,56 @@ def main():
         if rdf.empty:
             st.warning("No retention data.")
         else:
+            platforms_in_data = sorted(rdf['platform'].dropna().unique().tolist()) if 'platform' in rdf.columns else ['All']
             rv = sorted(rdf['app_version'].unique().tolist(), key=version_sort_key)
             ret_days = [1, 3, 7, 14]
-            trows = []
-            d1_vals = {}
-            for ver in rv:
-                vdf = rdf[rdf['app_version'] == ver]
-                cd0 = vdf[vdf['days_since_install'] == 0]['cohort_size'].sum()
-                row = {'Version': ver, 'Cohort': fmt_number(cd0)}
-                for rd in ret_days:
-                    r = weighted_retention(vdf[vdf['days_since_install'] == rd])
-                    n = vdf[vdf['days_since_install'] == rd]['cohort_size'].sum()
-                    row[f'D{rd}'] = fmt_pct(r) if n > 0 else 'N/A'
-                    if rd == 1 and n > 0:
-                        d1_vals[ver] = r
-                trows.append(row)
 
-            # Auto insights
-            if d1_vals:
-                best_d1 = max(d1_vals, key=d1_vals.get)
-                worst_d1 = min(d1_vals, key=d1_vals.get)
-                st.markdown(f'<div class="summary-box"><h4>Quick Insights</h4>'
-                            f'<b>{len(rv)}</b> versions compared. '
-                            f'Best D1 retention: <b>v{best_d1}</b> ({d1_vals[best_d1]:.1%}). '
-                            f'Lowest D1: <b>v{worst_d1}</b> ({d1_vals[worst_d1]:.1%}). '
-                            f'Retention excludes days with 0 active users to avoid skew.</div>',
-                            unsafe_allow_html=True)
-            st.dataframe(pd.DataFrame(trows), use_container_width=True, hide_index=True)
+            for plat in platforms_in_data:
+                st.markdown(f"#### {plat}")
+                pdf = rdf[rdf['platform'] == plat] if 'platform' in rdf.columns else rdf
 
+                trows = []
+                d1_vals = {}
+                for ver in rv:
+                    vdf = pdf[pdf['app_version'] == ver]
+                    cd0 = vdf[vdf['days_since_install'] == 0]['cohort_size'].sum()
+                    if cd0 == 0:
+                        continue
+                    row = {'Version': ver, 'Cohort': fmt_number(cd0)}
+                    for rd in ret_days:
+                        r = weighted_retention(vdf[vdf['days_since_install'] == rd])
+                        n = vdf[vdf['days_since_install'] == rd]['cohort_size'].sum()
+                        row[f'D{rd}'] = fmt_pct(r) if n > 0 else 'N/A'
+                        if rd == 1 and n > 0:
+                            d1_vals[ver] = r
+                    trows.append(row)
+
+                if d1_vals:
+                    best_d1 = max(d1_vals, key=d1_vals.get)
+                    worst_d1 = min(d1_vals, key=d1_vals.get)
+                    st.markdown(f'<div class="summary-box">'
+                                f'<b>{plat}</b> — {len(trows)} versions. '
+                                f'Best D1: <b>v{best_d1}</b> ({d1_vals[best_d1]:.1%}). '
+                                f'Lowest D1: <b>v{worst_d1}</b> ({d1_vals[worst_d1]:.1%}).</div>',
+                                unsafe_allow_html=True)
+                if trows:
+                    st.dataframe(pd.DataFrame(trows), use_container_width=True, hide_index=True)
+
+            st.markdown("---")
             st.markdown("#### Retention Curve")
+            ret_plat = st.radio("Platform", platforms_in_data, horizontal=True, key="ret_curve_plat")
             dr = st.radio("Range", ["D7 (0-7)", "D14 (0-14)", "D30 (0-30)"], horizontal=True, index=1, key="ret_curve_range")
             md = {"D7 (0-7)": 7, "D14 (0-14)": 14, "D30 (0-30)": 30}[dr]
-            cdf = rdf[rdf['days_since_install'] <= md]
+            cdf = rdf[(rdf['days_since_install'] <= md) & (rdf['platform'] == ret_plat)] if 'platform' in rdf.columns else rdf[rdf['days_since_install'] <= md]
             cr = []
             for ver in rv:
                 sub = cdf[cdf['app_version'] == ver]
                 for d in range(0, md + 1):
                     ds = sub[(sub['days_since_install'] == d) & (sub['users_active'] > 0)]
                     cs, ua = ds['cohort_size'].sum(), ds['users_active'].sum()
-                    cr.append({'day': d, 'retention': ua / cs if cs > 0 else None, 'version': ver, 'cohort': cs})
-            cp = pd.DataFrame(cr).dropna(subset=['retention'])
+                    if cs > 0:
+                        cr.append({'day': d, 'retention': ua / cs, 'version': ver, 'cohort': cs})
+            cp = pd.DataFrame(cr)
             if not cp.empty:
                 fig = go.Figure()
                 for ver in rv:
@@ -1173,24 +1183,32 @@ def main():
                         name=f"v{ver}", line=dict(color=color_map.get(ver, '#333'), width=2.5), marker=dict(size=5),
                         customdata=vg[['cohort']].values,
                         hovertemplate='Day %{x}<br>Ret: %{y:.2%}<br>Cohort: %{customdata[0]:,}<extra></extra>'))
-                apply_chart_theme(fig, title=dict(text="Retention Curve"), xaxis_title="Days Since Install",
+                apply_chart_theme(fig, title=dict(text=f"Retention Curve — {ret_plat}"), xaxis_title="Days Since Install",
                     yaxis_title="Retention %", yaxis_tickformat='.1%', height=500, hovermode='x unified',
                     xaxis=dict(dtick=1 if md <= 14 else 5))
                 st.plotly_chart(fig, use_container_width=True)
 
+            st.markdown("---")
             st.markdown("#### Per-User KPIs")
             pu_kpis = {'Revenue / User': 'total_revenue', 'IAPs / User': 'total_iaps_revenue', 'Ads / User': 'total_ads_revenue',
                        'Merges / User': 'total_merges', 'Generations / User': 'total_generations', 'Board Tasks / User': 'total_board_tasks_completed', 'Paid Rate': 'total_paid_today'}
-            prows = []
-            for ver in rv:
-                vdf = rdf[rdf['app_version'] == ver]
-                dau = vdf['total_dau'].sum()
-                row = {'Version': ver}
-                for lb, col in pu_kpis.items():
-                    val = vdf[col].sum() / dau if dau > 0 else 0
-                    row[lb] = fmt_money(val) if col in ['total_revenue', 'total_iaps_revenue', 'total_ads_revenue'] else f"{val:.4f}"
-                prows.append(row)
-            st.dataframe(pd.DataFrame(prows), use_container_width=True, hide_index=True)
+
+            for plat in platforms_in_data:
+                st.markdown(f"**{plat}**")
+                pdf = rdf[rdf['platform'] == plat] if 'platform' in rdf.columns else rdf
+                prows = []
+                for ver in rv:
+                    vdf = pdf[pdf['app_version'] == ver]
+                    dau = vdf['total_dau'].sum()
+                    if dau == 0:
+                        continue
+                    row = {'Version': ver}
+                    for lb, col in pu_kpis.items():
+                        val = vdf[col].sum() / dau if dau > 0 else 0
+                        row[lb] = fmt_money(val) if col in ['total_revenue', 'total_iaps_revenue', 'total_ads_revenue'] else f"{val:.4f}"
+                    prows.append(row)
+                if prows:
+                    st.dataframe(pd.DataFrame(prows), use_container_width=True, hide_index=True)
 
     # =========================================================================
     # TAB 4: DAILY RETENTION
