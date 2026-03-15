@@ -4,6 +4,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import numpy as np
 from google.cloud import bigquery
+from google.oauth2 import service_account
 from datetime import date, datetime
 
 # =============================================================================
@@ -136,6 +137,12 @@ def inject_css():
 
 @st.cache_resource(ttl=600)
 def get_bq_client():
+    if "gcp_service_account" in st.secrets:
+        credentials = service_account.Credentials.from_service_account_info(
+            st.secrets["gcp_service_account"],
+            scopes=["https://www.googleapis.com/auth/bigquery"],
+        )
+        return bigquery.Client(project=BQ_PROJECT, credentials=credentials)
     return bigquery.Client(project=BQ_PROJECT)
 
 
