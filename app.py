@@ -15,7 +15,7 @@ BQ_PROJECT = "yotam-395120"
 FTUE_TABLE = f"{BQ_PROJECT}.peerplay.ftue_dashboard"
 RETENTION_TABLE = f"{BQ_PROJECT}.peerplay.hint_system_ab_test_results"
 
-TEST_START_DATE = date(2026, 3, 16)
+TEST_START_DATE = date(2026, 3, 17)
 
 DAYS_SINCE_INSTALL_BUCKET_ORDER = ['0-3', '3-7', '7-14', '14-21', '21-30', '30-60']
 
