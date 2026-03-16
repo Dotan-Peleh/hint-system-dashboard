@@ -537,9 +537,10 @@ def main():
     # =========================================================================
     # TABS
     # =========================================================================
-    tab_ba, tab_funnel, tab_installs, tab_daily_steps, tab_retention, tab_daily_retention = st.tabs([
+    tab_ba, tab_funnel, tab_steps_trend, tab_installs, tab_daily_steps, tab_retention, tab_daily_retention = st.tabs([
         "Before vs After",
         "Chart: Version",
+        "FTUE Steps Trend",
         "Install Distribution",
         "Daily Step Tracking",
         "Retention by Version",
@@ -1034,6 +1035,151 @@ def main():
                     {"Step": "46: click_harvest_collect_ch3", "Event": "click_harvest_collect", "Description": "User collects harvest reward (chapter 3)"},
                 ]
                 st.dataframe(pd.DataFrame(step_reference), use_container_width=True, hide_index=True, height=400)
+
+    # =========================================================================
+    # TAB: FTUE STEPS TREND BY DATE
+    # =========================================================================
+    with tab_steps_trend:
+        st.markdown("### FTUE Steps Trend by Date")
+        st.caption("Compare how each FTUE step's conversion rate changes over time")
+
+        if fdf.empty or 'install_date' not in fdf.columns:
+            st.warning("No FTUE data for selected filters.")
+        else:
+            pct_cols_t = get_pct_columns(fdf)
+            ratio_cols_t = get_ratio_columns(fdf)
+
+            tc1, tc2, tc3 = st.columns(3)
+            with tc1:
+                t_metric_opts = []
+                if pct_cols_t: t_metric_opts.append("Conversion vs Step 1")
+                if ratio_cols_t: t_metric_opts.append("Conversion vs Previous Step")
+                t_metric = st.selectbox("Metric type", t_metric_opts, key="trend_metric") if t_metric_opts else None
+            with tc2:
+                t_granularity = st.radio("Time granularity", ["Daily", "Weekly", "Monthly"], horizontal=True, key="trend_gran")
+            with tc3:
+                t_metrics = pct_cols_t if t_metric == "Conversion vs Step 1" else (ratio_cols_t if t_metric == "Conversion vs Previous Step" else pct_cols_t)
+                t_labels = [format_step_label(m) for m in t_metrics] if t_metrics else []
+                t_label_map = dict(zip(t_labels, t_metrics))
+
+                t_selected = st.multiselect("Select steps to display", t_labels,
+                    default=t_labels[:8] if len(t_labels) > 8 else t_labels, key="trend_steps")
+
+            # Quick-select buttons
+            bc1, bc2, bc3, bc4, bc5 = st.columns(5)
+            if bc1.button("First 10 Steps", key="t_first10"):
+                t_selected = t_labels[:10]
+            if bc2.button("Steps 11-20", key="t_11_20"):
+                t_selected = t_labels[10:20] if len(t_labels) > 10 else t_labels
+            if bc3.button("Steps 21-30", key="t_21_30"):
+                t_selected = t_labels[20:30] if len(t_labels) > 20 else t_labels
+            if bc4.button("Steps 31-46", key="t_31_46"):
+                t_selected = t_labels[30:] if len(t_labels) > 30 else t_labels
+            if bc5.button("All Steps", key="t_all"):
+                t_selected = t_labels
+
+            if t_selected and t_metrics:
+                # Determine time column
+                time_col = 'install_date'
+                if t_granularity == "Weekly" and 'install_week' in fdf.columns:
+                    time_col = 'install_week'
+                elif t_granularity == "Monthly" and 'install_month' in fdf.columns:
+                    time_col = 'install_month'
+
+                # Compute weighted average per time period per step
+                trend_records = []
+                for period_val, gdf in fdf.groupby(time_col):
+                    tu = gdf['total_users'].sum() if 'total_users' in gdf.columns else len(gdf)
+                    if tu == 0:
+                        continue
+                    for label in t_selected:
+                        col = t_label_map.get(label)
+                        if col and col in gdf.columns:
+                            if 'total_users' in gdf.columns:
+                                val = (gdf[col] * gdf['total_users']).sum() / tu
+                            else:
+                                val = gdf[col].mean()
+                            trend_records.append({
+                                'period': period_val,
+                                'step': label,
+                                'value': val,
+                                'users': tu,
+                            })
+
+                trend_df = pd.DataFrame(trend_records)
+                if trend_df.empty:
+                    st.info("No trend data for selected steps.")
+                else:
+                    if time_col == 'install_date':
+                        trend_df['period'] = pd.to_datetime(trend_df['period'])
+
+                    # One chart per step
+                    for step_label in t_selected:
+                        sdf = trend_df[trend_df['step'] == step_label].sort_values('period')
+                        if sdf.empty:
+                            continue
+
+                        fig_t = go.Figure()
+                        fig_t.add_trace(go.Scatter(
+                            x=sdf['period'], y=sdf['value'],
+                            mode='lines+markers',
+                            name=step_label,
+                            line=dict(color=COLORS['before'], width=2.5),
+                            marker=dict(size=6),
+                            customdata=sdf[['users']].values,
+                            hovertemplate='%{x}<br>' + step_label + ': %{y:.4f}<br>Users: %{customdata[0]:,}<extra></extra>',
+                        ))
+
+                        # Before/After averages
+                        if time_col == 'install_date':
+                            sb = sdf[sdf['period'] < pd.Timestamp(TEST_START_DATE)]
+                            sa = sdf[sdf['period'] >= pd.Timestamp(TEST_START_DATE)]
+                            if not sb.empty:
+                                avg_b = sb['value'].mean()
+                                fig_t.add_hline(y=avg_b, line_dash="dot", line_color=COLORS['before'], line_width=1.5,
+                                    annotation_text=f"Avg Before: {avg_b:.4f}", annotation_position="top left",
+                                    annotation_font=dict(size=10, color=COLORS['before']))
+                            if not sa.empty:
+                                avg_a = sa['value'].mean()
+                                fig_t.add_hline(y=avg_a, line_dash="dot", line_color=COLORS['after'], line_width=1.5,
+                                    annotation_text=f"Avg After: {avg_a:.4f}", annotation_position="top right",
+                                    annotation_font=dict(size=10, color=COLORS['after']))
+                            add_test_start_line(fig_t)
+
+                        apply_chart_theme(fig_t,
+                            title=dict(text=step_label),
+                            xaxis_title="Date" if time_col == 'install_date' else t_granularity,
+                            yaxis_title="Conversion Rate",
+                            yaxis_tickformat='.2f',
+                            height=350, hovermode='x unified',
+                        )
+                        st.plotly_chart(fig_t, use_container_width=True)
+
+                    # Summary table: before vs after per step
+                    if time_col == 'install_date':
+                        st.markdown("#### Before vs After Summary")
+                        summary_rows = []
+                        for label in t_selected:
+                            col = t_label_map.get(label)
+                            if not col:
+                                continue
+                            bdf = fdf[fdf['install_date'] < TEST_START_DATE]
+                            adf = fdf[fdf['install_date'] >= TEST_START_DATE]
+                            tub = bdf['total_users'].sum() if 'total_users' in bdf.columns else len(bdf)
+                            tua = adf['total_users'].sum() if 'total_users' in adf.columns else len(adf)
+                            vb = (bdf[col] * bdf['total_users']).sum() / tub if 'total_users' in bdf.columns and tub > 0 else (bdf[col].mean() if not bdf.empty else 0)
+                            va = (adf[col] * adf['total_users']).sum() / tua if 'total_users' in adf.columns and tua > 0 else (adf[col].mean() if not adf.empty else 0)
+                            delta = va - vb
+                            pct_ch = (delta / vb * 100) if vb > 0 else 0
+                            summary_rows.append({
+                                'Step': label,
+                                'Before': f"{vb:.4f}",
+                                'After': f"{va:.4f}" if tua > 0 else '-',
+                                'Delta': f"{delta:+.4f}" if tua > 0 else '-',
+                                '% Change': f"{pct_ch:+.1f}%" if tua > 0 else '-',
+                            })
+                        if summary_rows:
+                            st.dataframe(pd.DataFrame(summary_rows), use_container_width=True, hide_index=True)
 
     # =========================================================================
     # TAB: INSTALL DISTRIBUTION
