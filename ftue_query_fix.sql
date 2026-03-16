@@ -120,7 +120,9 @@ ftue_anchors AS (
     -- Privacy (start of FTUE)
     MIN(CASE WHEN mp_event_name = 'impression_privacy' THEN res_timestamp END) AS ts_privacy,
     -- How to play (between flow1 and flow2)
-    MIN(CASE WHEN mp_event_name = 'impression_how_to_play' THEN res_timestamp END) AS ts_how_to_play
+    MIN(CASE WHEN mp_event_name = 'impression_how_to_play' THEN res_timestamp END) AS ts_how_to_play,
+    -- click_board_button_scapes (for step 09 constraint)
+    MIN(CASE WHEN mp_event_name = 'click_board_button_scapes' THEN res_timestamp END) AS ts_click_board_scapes
   FROM user_events
   GROUP BY distinct_id
 ),
@@ -170,9 +172,10 @@ funnel_flags AS (
           AND (a.ts_flow1_step2 IS NULL OR ue.res_timestamp <= a.ts_flow1_step2)
           THEN 1 ELSE 0 END) AS step_08,
 
-    -- Step 09: impression_board (constrain: between flow1_step1 and flow1_step2)
+    -- Step 09: impression_board (constrain: between flow1_step1 and flow1_step2, AND after click_board_scapes)
     MAX(CASE WHEN ue.mp_event_name = 'impression_board'
           AND a.ts_flow1_step1 IS NOT NULL AND ue.res_timestamp >= a.ts_flow1_step1
+          AND a.ts_click_board_scapes IS NOT NULL AND ue.res_timestamp >= a.ts_click_board_scapes
           AND (a.ts_flow1_step2 IS NULL OR ue.res_timestamp <= a.ts_flow1_step2)
           THEN 1 ELSE 0 END) AS step_09,
 
@@ -239,10 +242,10 @@ funnel_flags AS (
           AND (a.ts_flow2_step0 IS NULL OR ue.res_timestamp <= a.ts_flow2_step0)
           THEN 1 ELSE 0 END) AS step_22,
 
-    -- Step 23: click_scapes_button_board (constrain: between flow1_step7 and flow2_step0)
+    -- Step 23: click_scapes_button_board (constrain: AFTER how_to_play AND before flow2_step1)
     MAX(CASE WHEN ue.mp_event_name = 'click_scapes_button_board'
-          AND a.ts_flow1_step7 IS NOT NULL AND ue.res_timestamp >= a.ts_flow1_step7
-          AND (a.ts_flow2_step0 IS NULL OR ue.res_timestamp <= a.ts_flow2_step0)
+          AND a.ts_how_to_play IS NOT NULL AND ue.res_timestamp >= a.ts_how_to_play
+          AND (a.ts_flow2_step1 IS NULL OR ue.res_timestamp <= a.ts_flow2_step1)
           THEN 1 ELSE 0 END) AS step_23,
 
     -- Step 24: ftue_flow2_step0 (anchor)
@@ -352,11 +355,15 @@ funnel_flags AS (
       ELSE 0
     END) AS step_42,
 
-    -- Step 43: ftue_flow12_step0 (anchor)
-    MAX(CASE WHEN ue.mp_event_name = 'impression_ftue_flow12_step0' THEN 1 ELSE 0 END) AS step_43,
+    -- Step 43: ftue_flow12_step0 (constrain: only if user completed flow3_step8_ch2)
+    MAX(CASE WHEN ue.mp_event_name = 'impression_ftue_flow12_step0'
+          AND a.ts_flow3_step8_ch2 IS NOT NULL AND ue.res_timestamp >= a.ts_flow3_step8_ch2
+          THEN 1 ELSE 0 END) AS step_43,
 
-    -- Step 44: ftue_flow12_step4 (anchor)
-    MAX(CASE WHEN ue.mp_event_name = 'impression_ftue_flow12_step4' THEN 1 ELSE 0 END) AS step_44,
+    -- Step 44: ftue_flow12_step4 (constrain: only if user completed flow3_step8_ch2)
+    MAX(CASE WHEN ue.mp_event_name = 'impression_ftue_flow12_step4'
+          AND a.ts_flow3_step8_ch2 IS NOT NULL AND ue.res_timestamp >= a.ts_flow3_step8_ch2
+          THEN 1 ELSE 0 END) AS step_44,
 
     -- Step 45: scapes_tasks_new_chapter ch3 (constrain: after flow3_step8_ch2)
     MAX(CASE WHEN ue.mp_event_name = 'scapes_tasks_new_chapter' AND ue.chapter = 3
