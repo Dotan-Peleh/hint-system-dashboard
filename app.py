@@ -1096,6 +1096,75 @@ def main():
                 ]
                 st.dataframe(pd.DataFrame(step_reference), use_container_width=True, hide_index=True, height=400)
 
+                # --- Auto-detect upticks and explain ---
+                st.markdown("#### Funnel Anomalies (Upticks)")
+
+                # Detect upticks from actual data
+                uptick_explanations = {
+                    '09': {
+                        'name': 'impression_board',
+                        'issue': 'impression_board fires at the same time as click_board_button_scapes (step 08). Tiny rounding difference (<0.01%).',
+                        'fix': 'Merge steps 08 and 09 into a single step, or constrain impression_board to only fire AFTER click_board_button_scapes within the same millisecond window.',
+                    },
+                    '23': {
+                        'name': 'click_scapes_button_board',
+                        'issue': 'Some users tap the scapes button slightly after the how_to_play impression (step 22) but before the flow2_step0 anchor fires. The time window allows it but the ordering is slightly off.',
+                        'fix': 'Tighten the time window: constrain click_scapes_button_board to only count if it happens AFTER impression_how_to_play AND the user also reached flow2_step0. Alternatively, swap steps 22 and 23 in the funnel order since users click the button to navigate to scapes which then triggers how_to_play.',
+                    },
+                    '43': {
+                        'name': 'ftue_flow12_step0',
+                        'issue': 'Flow 12 (hint system intro) can trigger independently of Flow 3 completion. Users who skip or partially complete Flow 3 step 8 (step 42) may still enter Flow 12, causing step 43 > step 42.',
+                        'fix': 'Add a dependency: only count ftue_flow12_step0 if the user also completed ftue_flow3_step8_ch2 (step 42). In the query, add: AND a.ts_flow3_step8_ch2 IS NOT NULL AND ue.res_timestamp >= a.ts_flow3_step8_ch2',
+                    },
+                }
+
+                # Compute actual upticks from current data
+                all_step_vals = {}
+                for ver in sorted(fdf['install_version_str'].unique(), key=version_sort_key):
+                    vdf = fdf[fdf['install_version_str'] == ver]
+                    tu = vdf['total_users'].sum() if 'total_users' in vdf.columns else len(vdf)
+                    if tu < 100:
+                        continue
+                    ver_vals = []
+                    for m in pct_cols:
+                        if 'total_users' in vdf.columns and tu > 0:
+                            val = (vdf[m] * vdf['total_users']).sum() / tu
+                        else:
+                            val = vdf[m].mean()
+                        ver_vals.append((m, val))
+                    all_step_vals[ver] = ver_vals
+
+                found_upticks = []
+                for ver, vals in all_step_vals.items():
+                    for i in range(1, len(vals)):
+                        curr_col, curr_val = vals[i]
+                        prev_col, prev_val = vals[i-1]
+                        if curr_val > prev_val + 0.0005:
+                            step_num = format_step_label(curr_col).split(':')[0].strip()
+                            uptick_pct = (curr_val - prev_val) * 100
+                            explanation = uptick_explanations.get(step_num, {})
+                            found_upticks.append({
+                                'Version': ver,
+                                'Step': format_step_label(curr_col),
+                                'Value': f"{curr_val:.4f}",
+                                'Prev Step': format_step_label(prev_col),
+                                'Prev Value': f"{prev_val:.4f}",
+                                'Uptick': f"+{uptick_pct:.2f}%",
+                                'Root Cause': explanation.get('issue', 'Generic event may fire outside FTUE session window.'),
+                                'Suggested Fix': explanation.get('fix', 'Add timestamp constraint to only count this event during the FTUE session.'),
+                            })
+
+                if found_upticks:
+                    st.markdown(f'<div class="alert-yellow"><b>{len(found_upticks)} uptick(s) detected</b> — '
+                                f'steps where conversion goes UP from the previous step. '
+                                f'In a scripted FTUE this should not happen. '
+                                f'These are caused by generic game events counting outside the FTUE time window.</div>',
+                                unsafe_allow_html=True)
+                    st.dataframe(pd.DataFrame(found_upticks), use_container_width=True, hide_index=True)
+                else:
+                    st.markdown('<div class="alert-green"><b>No upticks detected.</b> All steps are monotonically decreasing — the funnel data is clean.</div>',
+                                unsafe_allow_html=True)
+
     # =========================================================================
     # TAB: FTUE STEPS TREND BY DATE
     # =========================================================================
