@@ -242,14 +242,16 @@ funnel_flags AS (
           AND (a.ts_flow2_step0 IS NULL OR ue.res_timestamp <= a.ts_flow2_step0)
           THEN 1 ELSE 0 END) AS step_22,
 
-    -- Step 23: click_scapes_button_board (constrain: AFTER how_to_play AND before flow2_step1)
+    -- Step 23: click_scapes_button_board (constrain: AFTER how_to_play AND before flow2_step0)
     MAX(CASE WHEN ue.mp_event_name = 'click_scapes_button_board'
           AND a.ts_how_to_play IS NOT NULL AND ue.res_timestamp >= a.ts_how_to_play
-          AND (a.ts_flow2_step1 IS NULL OR ue.res_timestamp <= a.ts_flow2_step1)
+          AND (a.ts_flow2_step0 IS NULL OR ue.res_timestamp <= a.ts_flow2_step0)
           THEN 1 ELSE 0 END) AS step_23,
 
-    -- Step 24: ftue_flow2_step0 (anchor)
-    MAX(CASE WHEN ue.mp_event_name = 'impression_ftue_flow2_step0' THEN 1 ELSE 0 END) AS step_24,
+    -- Step 24: ftue_flow2_step0 (constrain: must have seen how_to_play first)
+    MAX(CASE WHEN ue.mp_event_name = 'impression_ftue_flow2_step0'
+          AND a.ts_how_to_play IS NOT NULL AND ue.res_timestamp >= a.ts_how_to_play
+          THEN 1 ELSE 0 END) AS step_24,
 
     -- Step 25: impression_dialog 10013 (constrain: between flow2_step0 and flow2_step1)
     MAX(CASE WHEN ue.mp_event_name = 'impression_dialog' AND ue.dialog_id = '10013'
