@@ -202,10 +202,11 @@ def version_sort_key(v):
         return 0.0
 
 def weighted_retention(df):
-    cs = df['cohort_size'].sum()
+    filtered = df[df['users_active'] > 0]
+    cs = filtered['cohort_size'].sum()
     if cs == 0:
         return 0.0
-    return df['users_active'].sum() / cs
+    return filtered['users_active'].sum() / cs
 
 def fmt_pct(val):
     if val is None or (isinstance(val, float) and np.isnan(val)):
@@ -591,9 +592,9 @@ def main():
             has_after_ret = not vdf_ret_after.empty
             for rd in [1, 3, 7, 14]:
                 rb = weighted_retention(vdf_ret_before[vdf_ret_before['days_since_install'] == rd])
-                nb = vdf_ret_before[vdf_ret_before['days_since_install'] == rd]['cohort_size'].sum()
+                nb = vdf_ret_before[(vdf_ret_before['days_since_install'] == rd) & (vdf_ret_before['users_active'] > 0)]['cohort_size'].sum()
                 ra = weighted_retention(vdf_ret_after[vdf_ret_after['days_since_install'] == rd])
-                na = vdf_ret_after[vdf_ret_after['days_since_install'] == rd]['cohort_size'].sum()
+                na = vdf_ret_after[(vdf_ret_after['days_since_install'] == rd) & (vdf_ret_after['users_active'] > 0)]['cohort_size'].sum()
                 ret_data[rd] = {'before': rb, 'after': ra, 'nb': nb, 'na': na}
 
         # --- SUMMARY ---
@@ -855,7 +856,7 @@ def main():
             for ret_d in [1, 3]:
                 daily_ret = []
                 for dt, gdf in vdf_ret.groupby('date'):
-                    ddf = gdf[gdf['days_since_install'] == ret_d]
+                    ddf = gdf[(gdf['days_since_install'] == ret_d) & (gdf['users_active'] > 0)]
                     cs, ua = ddf['cohort_size'].sum(), ddf['users_active'].sum()
                     ret = ua / cs if cs > 0 else None
                     cohort_d0 = gdf[gdf['days_since_install'] == 0]['cohort_size'].sum()
@@ -1276,7 +1277,7 @@ def main():
             for ver in rv:
                 sub = cdf[cdf['app_version'] == ver]
                 for d in range(0, md + 1):
-                    ds = sub[sub['days_since_install'] == d]
+                    ds = sub[(sub['days_since_install'] == d) & (sub['users_active'] > 0)]
                     cs, ua = ds['cohort_size'].sum(), ds['users_active'].sum()
                     if cs > 0:
                         cr.append({'day': d, 'retention': ua / cs, 'version': ver, 'cohort': cs})
@@ -1336,7 +1337,7 @@ def main():
             rds = st.selectbox("Retention day", [1, 3, 7, 14], index=0, key="daily_ret_day")
             recs = []
             for (dt, ver), gdf in rdf.groupby(['date', 'app_version']):
-                ddf = gdf[gdf['days_since_install'] == rds]
+                ddf = gdf[(gdf['days_since_install'] == rds) & (gdf['users_active'] > 0)]
                 cs, ua = ddf['cohort_size'].sum(), ddf['users_active'].sum()
                 cd0 = gdf[gdf['days_since_install'] == 0]['cohort_size'].sum()
                 recs.append({'date': dt, 'version': ver, 'retention': ua / cs if cs > 0 else None, 'cohort': cd0})
@@ -1363,8 +1364,8 @@ def main():
                         vb = bret[(bret['app_version'] == ver) & (bret['days_since_install'] == rd)]
                         va = aret[(aret['app_version'] == ver) & (aret['days_since_install'] == rd)]
                         rb, ra = weighted_retention(vb), weighted_retention(va)
-                        nb = vb['cohort_size'].sum()
-                        na = va['cohort_size'].sum()
+                        nb = vb[vb['users_active'] > 0]['cohort_size'].sum()
+                        na = va[va['users_active'] > 0]['cohort_size'].sum()
                         row[f'D{rd} Before'] = fmt_pct(rb) if nb > 0 else 'N/A'
                         row[f'D{rd} After'] = fmt_pct(ra) if na > 0 else 'N/A'
                         row[f'D{rd} Delta'] = f"{ra - rb:+.2%}" if nb > 0 and na > 0 else 'N/A'
