@@ -1094,6 +1094,33 @@ def main():
                             hovertemplate='<b>%{x}</b><br>v' + str(ver) + ': %{y:.4f}<extra></extra>'))
                     else:
                         fig.add_trace(go.Bar(x=step_labels, y=values, name=str(ver), marker_color=color_map.get(str(ver), '#333')))
+                # Add drop-off annotations to the chart for the first (or only) version
+                first_ver = sorted(fdf['install_version_str'].unique(), key=version_sort_key)[0]
+                fv_df = fdf[fdf['install_version_str'] == first_ver]
+                fv_tu = fv_df['total_users'].sum() if 'total_users' in fv_df.columns else len(fv_df)
+                if fv_tu > 0 and chart_type == "Line":
+                    fv_vals = []
+                    for m in metrics:
+                        val = (fv_df[m] * fv_df['total_users']).sum() / fv_tu if 'total_users' in fv_df.columns else fv_df[m].mean()
+                        fv_vals.append(val)
+                    # Find top 3 drops
+                    drops = []
+                    for i in range(1, len(fv_vals)):
+                        if fv_vals[i-1] > 0:
+                            drop_pct = (fv_vals[i-1] - fv_vals[i]) / fv_vals[i-1] * 100
+                            drops.append((i, drop_pct, fv_vals[i]))
+                    drops.sort(key=lambda x: -x[1])
+                    for rank, (idx, drop_pct, yval) in enumerate(drops[:3]):
+                        fig.add_annotation(
+                            x=step_labels[idx], y=yval,
+                            text=f"<b>-{drop_pct:.1f}%</b>",
+                            showarrow=True, arrowhead=2, arrowcolor=COLORS['negative'],
+                            arrowwidth=1.5, ay=30 + rank * 20,
+                            font=dict(size=10, color=COLORS['negative']),
+                            bgcolor='rgba(255,255,255,0.9)', borderpad=3,
+                            bordercolor=COLORS['negative'], borderwidth=1,
+                        )
+
                 apply_chart_theme(fig, xaxis_title="FTUE Steps", yaxis_title="Value", height=620,
                     hovermode='x unified', xaxis_tickangle=-45, xaxis=dict(tickfont=dict(size=9)),
                     yaxis=dict(tickformat='.2f'), barmode='group' if chart_type == "Bar" else None, margin=dict(b=160, t=70))
