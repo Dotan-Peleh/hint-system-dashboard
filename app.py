@@ -927,6 +927,59 @@ def main():
                     rows.append(row)
                 st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
+                # Step Reference Table
+                st.markdown("#### Step Reference")
+                st.markdown('<div class="legend-box">What each FTUE step measures — the event name and conditions from the tracking query.</div>', unsafe_allow_html=True)
+                step_reference = [
+                    {"Step": "01: impression_privacy", "Event": "impression_privacy", "Description": "User sees the privacy screen"},
+                    {"Step": "02: impression_scapes_ch1", "Event": "impression_scapes", "Description": "User sees scapes screen (chapter 1)"},
+                    {"Step": "03: board_tasks_new_task", "Event": "board_tasks_new_task", "Description": "New board task appears"},
+                    {"Step": "04: impression_dialog_1001199", "Event": "impression_dialog", "Description": "Dialog 1001199 shown (intro dialog)"},
+                    {"Step": "05: click_dialog_exit_1001199", "Event": "click_dialog_exit", "Description": "User closes dialog 1001199"},
+                    {"Step": "06: ftue_flow1_step0", "Event": "impression_ftue_flow1_step0", "Description": "FTUE Flow 1 begins — first tutorial prompt"},
+                    {"Step": "07: ftue_flow1_step1", "Event": "impression_ftue_flow1_step1", "Description": "FTUE Flow 1 step 1 — tutorial continues"},
+                    {"Step": "08: click_board_button_scapes", "Event": "click_board_button_scapes", "Description": "User taps the scapes button on the board"},
+                    {"Step": "09: impression_board", "Event": "impression_board", "Description": "User sees the main board screen"},
+                    {"Step": "10: ftue_flow1_step2", "Event": "impression_ftue_flow1_step2", "Description": "FTUE Flow 1 step 2 — guided to merge"},
+                    {"Step": "11: generation_before_merge", "Event": "generation", "Description": "User generates an item BEFORE their first merge"},
+                    {"Step": "12: ftue_flow1_step3", "Event": "impression_ftue_flow1_step3", "Description": "FTUE Flow 1 step 3 — merge tutorial"},
+                    {"Step": "13: first_merge", "Event": "merge", "Description": "User performs their first ever merge"},
+                    {"Step": "14: ftue_flow1_step4", "Event": "impression_ftue_flow1_step4", "Description": "FTUE Flow 1 step 4 — post-merge guidance"},
+                    {"Step": "15: board_tasks_task_ready", "Event": "board_tasks_task_ready", "Description": "A board task becomes ready to complete"},
+                    {"Step": "16: ftue_flow1_step5", "Event": "impression_ftue_flow1_step5", "Description": "FTUE Flow 1 step 5 — task completion guide"},
+                    {"Step": "17: click_board_tasks_go", "Event": "click_board_tasks_go", "Description": "User taps 'Go' on a board task"},
+                    {"Step": "18: rewards_board_task", "Event": "rewards_board_task", "Description": "User receives reward for completing board task"},
+                    {"Step": "19: ftue_flow1_step6", "Event": "impression_ftue_flow1_step6", "Description": "FTUE Flow 1 step 6 — generation tutorial"},
+                    {"Step": "20: generation_after_merge", "Event": "generation", "Description": "User generates an item AFTER their first merge"},
+                    {"Step": "21: ftue_flow1_step7", "Event": "impression_ftue_flow1_step7", "Description": "FTUE Flow 1 step 7 — end of Flow 1"},
+                    {"Step": "22: impression_how_to_play", "Event": "impression_how_to_play", "Description": "User sees the 'How to Play' screen"},
+                    {"Step": "23: click_scapes_button_board", "Event": "click_scapes_button_board", "Description": "User taps scapes button from the board"},
+                    {"Step": "24: ftue_flow2_step0", "Event": "impression_ftue_flow2_step0", "Description": "FTUE Flow 2 begins — scapes tutorial"},
+                    {"Step": "25: impression_dialog_10013", "Event": "impression_dialog", "Description": "Dialog 10013 shown (scapes task intro)"},
+                    {"Step": "26: click_scapes_tasks_go_button", "Event": "click_scapes_tasks_go_button", "Description": "User taps 'Go' on a scapes task"},
+                    {"Step": "27: scapes_tasks_cash_deducted", "Event": "scapes_tasks_cash_deducted", "Description": "Cash deducted for scapes task"},
+                    {"Step": "28: rewards_scape_task", "Event": "rewards_scape_task", "Description": "User receives reward for scapes task"},
+                    {"Step": "29: click_dialog_exit_10013", "Event": "click_dialog_exit", "Description": "User closes dialog 10013"},
+                    {"Step": "30: ftue_flow2_step1", "Event": "impression_ftue_flow2_step1", "Description": "FTUE Flow 2 step 1 — ship tutorial"},
+                    {"Step": "31: impression_dialog_10015", "Event": "impression_dialog", "Description": "Dialog 10015 shown (ship intro)"},
+                    {"Step": "32: ftue_flow2_step2", "Event": "impression_ftue_flow2_step2", "Description": "FTUE Flow 2 step 2"},
+                    {"Step": "33: ship_animation", "Event": "impression_ship_animation_started", "Description": "Ship animation plays — chapter completion"},
+                    {"Step": "34: ftue_flow2_step5", "Event": "impression_ftue_flow2_step5", "Description": "FTUE Flow 2 step 5 — end of Flow 2"},
+                    {"Step": "35: ftue_flow3_step0", "Event": "impression_ftue_flow3_step0", "Description": "FTUE Flow 3 begins — chapter 2 tutorial"},
+                    {"Step": "36: new_chapter_2", "Event": "scapes_tasks_new_chapter", "Description": "User reaches chapter 2"},
+                    {"Step": "37: ftue_flow3_step1_ch2", "Event": "impression_ftue_flow3_step1", "Description": "FTUE Flow 3 step 1 (chapter 2)"},
+                    {"Step": "38: ftue_flow3_step2_ch2", "Event": "impression_ftue_flow3_step2", "Description": "FTUE Flow 3 step 2 (chapter 2)"},
+                    {"Step": "39: click_harvest_collect_ch2", "Event": "click_harvest_collect", "Description": "User collects harvest reward (chapter 2)"},
+                    {"Step": "40: ftue_flow3_step6_ch2", "Event": "impression_ftue_flow3_step6", "Description": "FTUE Flow 3 step 6 (chapter 2)"},
+                    {"Step": "41: click_reward_center", "Event": "click_reward_center", "Description": "User opens the reward center"},
+                    {"Step": "42: ftue_flow3_step8_ch2", "Event": "impression_ftue_flow3_step8", "Description": "FTUE Flow 3 step 8 — end of chapter 2 tutorial"},
+                    {"Step": "43: ftue_flow12_step0", "Event": "impression_ftue_flow12_step0", "Description": "FTUE Flow 12 begins — hint system intro"},
+                    {"Step": "44: ftue_flow12_step4", "Event": "impression_ftue_flow12_step4", "Description": "FTUE Flow 12 step 4 — hint system completion"},
+                    {"Step": "45: new_chapter_3", "Event": "scapes_tasks_new_chapter", "Description": "User reaches chapter 3"},
+                    {"Step": "46: click_harvest_collect_ch3", "Event": "click_harvest_collect", "Description": "User collects harvest reward (chapter 3)"},
+                ]
+                st.dataframe(pd.DataFrame(step_reference), use_container_width=True, hide_index=True, height=400)
+
     # =========================================================================
     # TAB: INSTALL DISTRIBUTION
     # =========================================================================
