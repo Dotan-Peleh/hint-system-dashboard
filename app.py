@@ -127,6 +127,12 @@ def inject_css():
     .tag-up { background: #D5F5E3; color: #1E8449; padding: 2px 8px; border-radius: 4px; font-weight: 600; font-size: 0.82rem; }
     .tag-down { background: #FADBD8; color: #C0392B; padding: 2px 8px; border-radius: 4px; font-weight: 600; font-size: 0.82rem; }
     .tag-flat { background: #EAECEE; color: #7F8C8D; padding: 2px 8px; border-radius: 4px; font-weight: 600; font-size: 0.82rem; }
+
+    /* --- Alert boxes --- */
+    .alert-red { background: #FDF2F2; border-left: 4px solid #E74C3C; border-radius: 0 8px 8px 0; padding: 12px 18px; margin: 8px 0; font-size: 0.88rem; color: #922B21; }
+    .alert-green { background: #EAFAF1; border-left: 4px solid #2ECB71; border-radius: 0 8px 8px 0; padding: 12px 18px; margin: 8px 0; font-size: 0.88rem; color: #1E8449; }
+    .alert-yellow { background: #FEF9E7; border-left: 4px solid #F39C12; border-radius: 0 8px 8px 0; padding: 12px 18px; margin: 8px 0; font-size: 0.88rem; color: #7D6608; }
+    .alert-red b, .alert-green b, .alert-yellow b { font-weight: 700; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -257,6 +263,16 @@ def get_version_color_map(versions):
     return {v: VERSION_PALETTE[i % len(VERSION_PALETTE)]
             for i, v in enumerate(sorted(versions, key=version_sort_key))}
 
+def render_alerts(alerts):
+    """Render a list of (type, message) alerts. Types: 'red', 'green', 'yellow'."""
+    if not alerts:
+        return
+    html = ""
+    for atype, msg in alerts:
+        html += f'<div class="alert-{atype}">{msg}</div>'
+    st.markdown(html, unsafe_allow_html=True)
+
+
 def calc_weighted_steps(subset, metrics_list):
     tu = subset['total_users'].sum() if 'total_users' in subset.columns else len(subset)
     vals = []
@@ -306,14 +322,14 @@ def delta_tag(val, fmt="+.1f", suffix="%"):
 
 def main():
     st.set_page_config(
-        page_title="Hint System A/B Test Dashboard",
+        page_title="Hint System Dashboard",
         page_icon="🔬",
         layout="wide",
         initial_sidebar_state="expanded",
     )
     inject_css()
 
-    st.markdown("## Hint System A/B Test Dashboard")
+    st.markdown("## Hint System Dashboard")
     st.caption(f"Comparing FTUE funnel & retention before vs after test start ({TEST_START_DATE.strftime('%b %d, %Y')})")
 
     # Load data
@@ -963,6 +979,26 @@ def main():
                             f'Lowest: <b>v{worst_ver}</b> ({ver_last.get(worst_ver, 0):.1%}).</div>',
                             unsafe_allow_html=True)
 
+                # --- Smart alerts ---
+                chart_alerts = []
+                # Check for versions with very low users
+                for ver, val in ver_last.items():
+                    vdf_check = fdf[fdf['install_version_str'] == ver]
+                    tu = vdf_check['total_users'].sum() if 'total_users' in vdf_check.columns else len(vdf_check)
+                    if 0 < tu < 100:
+                        chart_alerts.append(('yellow', f'<b>v{ver}</b> has only <b>{tu:,.0f}</b> users — data may be unreliable.'))
+                # Check gap between best and worst
+                if ver_last.get(best_ver, 0) > 0 and ver_last.get(worst_ver, 0) > 0:
+                    gap = ver_last[best_ver] - ver_last[worst_ver]
+                    if gap > 0.1:
+                        chart_alerts.append(('red', f'<b>{gap:.1%}</b> gap between best (<b>v{best_ver}</b>) and worst (<b>v{worst_ver}</b>) at last step. Investigate what differs.'))
+                # Check if last step conversion is below threshold
+                for ver, val in ver_last.items():
+                    if val > 0 and val < 0.5:
+                        chart_alerts.append(('yellow', f'<b>v{ver}</b> loses <b>{1-val:.0%}</b> of users before completing the FTUE.'))
+                        break
+                render_alerts(chart_alerts)
+
             pct_cols = get_pct_columns(fdf)
             ratio_cols = get_ratio_columns(fdf)
             c1, c2 = st.columns(2)
@@ -1070,6 +1106,40 @@ def main():
         if fdf.empty or 'install_date' not in fdf.columns:
             st.warning("No FTUE data for selected filters.")
         else:
+            # --- Smart alerts for trend ---
+            trend_alerts = []
+            has_post_ftue = (fdf['install_date'] >= TEST_START_DATE).any() if 'install_date' in fdf.columns else False
+            if has_post_ftue:
+                trend_alerts.append(('green', '<b>Post-test data available!</b> Compare the trend lines before and after the red "TEST START" marker. Look for steps bending upward.'))
+                # Check first few steps for significant change
+                t_pct = get_pct_columns(fdf)
+                if t_pct:
+                    bdf_t = fdf[fdf['install_date'] < TEST_START_DATE]
+                    adf_t = fdf[fdf['install_date'] >= TEST_START_DATE]
+                    tub = bdf_t['total_users'].sum() if 'total_users' in bdf_t.columns else len(bdf_t)
+                    tua = adf_t['total_users'].sum() if 'total_users' in adf_t.columns else len(adf_t)
+                    if tub > 0 and tua > 0:
+                        biggest_drop_step, biggest_drop_val = None, 0
+                        biggest_gain_step, biggest_gain_val = None, 0
+                        for col in t_pct:
+                            vb = (bdf_t[col] * bdf_t['total_users']).sum() / tub if 'total_users' in bdf_t.columns else bdf_t[col].mean()
+                            va = (adf_t[col] * adf_t['total_users']).sum() / tua if 'total_users' in adf_t.columns else adf_t[col].mean()
+                            if vb > 0:
+                                change_pct = (va - vb) / vb * 100
+                                if change_pct < biggest_drop_val:
+                                    biggest_drop_val = change_pct
+                                    biggest_drop_step = format_step_label(col)
+                                if change_pct > biggest_gain_val:
+                                    biggest_gain_val = change_pct
+                                    biggest_gain_step = format_step_label(col)
+                        if biggest_gain_val > 1:
+                            trend_alerts.append(('green', f'Biggest improvement: <b>{biggest_gain_step}</b> ({biggest_gain_val:+.1f}% vs before)'))
+                        if biggest_drop_val < -1:
+                            trend_alerts.append(('red', f'Biggest regression: <b>{biggest_drop_step}</b> ({biggest_drop_val:+.1f}% vs before). Investigate this step.'))
+            else:
+                trend_alerts.append(('yellow', '<b>Pre-test only.</b> The red dashed "TEST START" line marks where the test begins. Once post-test data flows in, alerts here will flag which steps improved or regressed.'))
+            render_alerts(trend_alerts)
+
             pct_cols_t = get_pct_columns(fdf)
             ratio_cols_t = get_ratio_columns(fdf)
 
@@ -1237,6 +1307,21 @@ def main():
                         f'<b>{total_installs:,}</b> total installs across <b>{n_versions}</b> versions. '
                         f'Dominant version: <b>v{top_ver["version"]}</b> ({top_ver_pct:.0f}% of installs, {int(top_ver["users"]):,} users).'
                         f'{mt_insight}</div>', unsafe_allow_html=True)
+
+            # --- Smart alerts ---
+            dist_alerts = []
+            if top_ver_pct > 80:
+                dist_alerts.append(('yellow', f'<b>v{top_ver["version"]}</b> accounts for {top_ver_pct:.0f}% of installs. Other versions have very small sample sizes — treat their metrics with caution.'))
+            small_vers = ver_dist_all[ver_dist_all['users'] < 50]
+            if len(small_vers) > 0:
+                sv_names = ', '.join([f'v{v}' for v in small_vers['version'].tolist()])
+                dist_alerts.append(('yellow', f'Versions with &lt;50 users (unreliable data): {sv_names}'))
+            if 'media_type' in fdf.columns:
+                mt_d = fdf.groupby('media_type')['total_users'].sum() if 'total_users' in fdf.columns else fdf['media_type'].value_counts()
+                top_mt_pct_val = mt_d.max() / mt_d.sum() * 100 if mt_d.sum() > 0 else 0
+                if top_mt_pct_val > 70:
+                    dist_alerts.append(('yellow', f'<b>{mt_d.idxmax()}</b> dominates at {top_mt_pct_val:.0f}% of traffic. FTUE metrics may be heavily skewed by this acquisition channel.'))
+            render_alerts(dist_alerts)
 
             col_pie1, col_pie2 = st.columns(2)
 
@@ -1406,6 +1491,32 @@ def main():
             rv = sorted(rdf['app_version'].unique().tolist(), key=version_sort_key)
             ret_days = [1, 3, 7, 14]
 
+            # --- Smart alerts ---
+            ret_alerts = []
+            has_post_ret_data = (rdf['date'] >= TEST_START_DATE).any()
+            if has_post_ret_data:
+                ret_alerts.append(('green', '<b>Post-test retention data is available.</b> Compare D1/D3 values in the "Before vs After" tab for a detailed breakdown.'))
+                # Check if D1 improved for any version
+                for ver in rv:
+                    vdf_b = rdf[(rdf['app_version'] == ver) & (rdf['date'] < TEST_START_DATE) & (rdf['days_since_install'] == 1)]
+                    vdf_a = rdf[(rdf['app_version'] == ver) & (rdf['date'] >= TEST_START_DATE) & (rdf['days_since_install'] == 1)]
+                    rb, ra = weighted_retention(vdf_b), weighted_retention(vdf_a)
+                    nb, na = vdf_b['cohort_size'].sum(), vdf_a['cohort_size'].sum()
+                    if nb > 0 and na > 0:
+                        delta = ra - rb
+                        if delta > 0.02:
+                            ret_alerts.append(('green', f'<b>v{ver}</b> D1 retention improved: {rb:.1%} → {ra:.1%} (<b>{delta:+.1%}</b>)'))
+                        elif delta < -0.02:
+                            ret_alerts.append(('red', f'<b>v{ver}</b> D1 retention dropped: {rb:.1%} → {ra:.1%} (<b>{delta:+.1%}</b>). Investigate.'))
+            else:
+                ret_alerts.append(('yellow', '<b>Pre-test only.</b> Retention data is live from BigQuery. Post-test comparisons will appear here once users install after the test start date.'))
+            # Small cohort warning
+            for ver in rv:
+                cd0 = rdf[(rdf['app_version'] == ver) & (rdf['days_since_install'] == 0)]['cohort_size'].sum()
+                if 0 < cd0 < 100:
+                    ret_alerts.append(('yellow', f'<b>v{ver}</b> has only <b>{cd0:,.0f}</b> users in cohort — too small for reliable retention.'))
+            render_alerts(ret_alerts)
+
             for plat in platforms_in_data:
                 st.markdown(f"#### {plat}")
                 pdf = rdf[rdf['platform'] == plat] if 'platform' in rdf.columns else rdf
@@ -1482,8 +1593,16 @@ def main():
             n_ret_vers = rdf['app_version'].nunique()
             st.markdown(f'<div class="summary-box"><h4>Quick Insights</h4>'
                         f'<b>{n_ret_days}</b> days of retention data across <b>{n_ret_vers}</b> versions. '
-                        f'{"Post-test data available — compare the trend before and after the red line." if has_post_ret else "Pre-test only. After the test starts, look for lines lifting above their pre-test average."} '
                         f'Select a retention day (D1/D3/D7/D14) to track.</div>', unsafe_allow_html=True)
+
+            # --- Smart alerts ---
+            daily_ret_alerts = []
+            if has_post_ret:
+                daily_ret_alerts.append(('green', '<b>Post-test data is in.</b> Look for the trend line lifting above the pre-test average after the red "TEST START" marker.'))
+            else:
+                daily_ret_alerts.append(('yellow', '<b>Pre-test only.</b> After the test starts, this tab will show whether daily retention is trending up or down compared to the baseline.'))
+            render_alerts(daily_ret_alerts)
+
             rds = st.selectbox("Retention day", [1, 3, 7, 14], index=0, key="daily_ret_day")
             recs = []
             for (dt, ver), gdf in rdf.groupby(['date', 'app_version']):
