@@ -591,11 +591,73 @@ def main():
     # TAB 0: BEFORE VS AFTER
     # =========================================================================
     with tab_ba:
-        ba_version = st.selectbox(
-            "Select version",
+        # --- Multi-version funnel comparison ---
+        ba_versions = st.multiselect(
+            "Select version(s) to compare",
             sorted(versions_in_data, key=version_sort_key, reverse=True),
-            index=0, key="ba_version",
+            default=[sorted(versions_in_data, key=version_sort_key, reverse=True)[0]] if versions_in_data else [],
+            key="ba_versions",
         )
+
+        if not fdf.empty and ba_versions and len(ba_versions) > 1:
+            st.markdown("---")
+            st.markdown("### Multi-Version Funnel Comparison")
+            pct_cols_mv = get_pct_columns(fdf)
+            if pct_cols_mv:
+                mv_labels = [format_step_label(m) for m in pct_cols_mv]
+                fig_mv = go.Figure()
+                mv_summary = []
+                for ver in sorted(ba_versions, key=version_sort_key):
+                    vdf_mv = fdf[fdf['install_version_str'] == str(ver)]
+                    tu = vdf_mv['total_users'].sum() if 'total_users' in vdf_mv.columns else len(vdf_mv)
+                    mv_vals = []
+                    for m in pct_cols_mv:
+                        val = (vdf_mv[m] * vdf_mv['total_users']).sum() / tu if 'total_users' in vdf_mv.columns and tu > 0 else vdf_mv[m].mean()
+                        mv_vals.append(val)
+                    fig_mv.add_trace(go.Scatter(
+                        x=mv_labels, y=mv_vals,
+                        mode='lines+markers',
+                        name=f"v{ver} ({tu:,.0f} users)",
+                        line=dict(color=color_map.get(str(ver), '#333'), width=2.5),
+                        marker=dict(size=6),
+                        hovertemplate='<b>%{x}</b><br>v' + str(ver) + ': %{y:.4f}<extra></extra>',
+                    ))
+                    mv_summary.append({'Version': ver, 'Users': fmt_number(tu),
+                                       'Last Step': f"{mv_vals[-1]:.1%}" if mv_vals else 'N/A'})
+
+                apply_chart_theme(fig_mv,
+                    title=dict(text="FTUE Funnel — Version Comparison"),
+                    xaxis_title="FTUE Steps", yaxis_title="Conversion Rate",
+                    height=550, hovermode='x unified',
+                    xaxis_tickangle=-45, xaxis=dict(tickfont=dict(size=9)),
+                    yaxis=dict(tickformat='.2f'), margin=dict(b=150, t=70))
+                st.plotly_chart(fig_mv, use_container_width=True)
+                st.dataframe(pd.DataFrame(mv_summary), use_container_width=True, hide_index=True)
+
+            # Multi-version retention comparison
+            if not rdf.empty:
+                st.markdown("#### Retention Comparison")
+                ret_comp_mv = []
+                for ver in sorted(ba_versions, key=version_sort_key):
+                    vr = rdf[rdf['app_version'] == str(ver)]
+                    cd0 = vr[vr['days_since_install'] == 0]['cohort_size'].sum()
+                    row = {'Version': ver, 'Cohort': fmt_number(cd0)}
+                    for rd in [1, 3, 7, 14]:
+                        r = weighted_retention(vr[vr['days_since_install'] == rd])
+                        n = vr[vr['days_since_install'] == rd]['cohort_size'].sum()
+                        row[f'D{rd}'] = fmt_pct(r) if n > 0 else 'N/A'
+                    ret_comp_mv.append(row)
+                st.dataframe(pd.DataFrame(ret_comp_mv), use_container_width=True, hide_index=True)
+
+        # --- Single version deep dive ---
+        ba_version = ba_versions[0] if ba_versions else (versions_in_data[0] if versions_in_data else None)
+        if not ba_version:
+            st.warning("Select at least one version.")
+        else:
+            if len(ba_versions) > 1:
+                st.markdown("---")
+                st.markdown(f"### Single Version Deep Dive: v{ba_version}")
+                st.caption("Showing detailed before/after analysis for the first selected version.")
 
         has_ftue = not fdf.empty
         has_ret = not rdf.empty
