@@ -202,11 +202,10 @@ def version_sort_key(v):
         return 0.0
 
 def weighted_retention(df):
-    filtered = df[df['users_active'] > 0]
-    cs = filtered['cohort_size'].sum()
+    cs = df['cohort_size'].sum()
     if cs == 0:
         return 0.0
-    return filtered['users_active'].sum() / cs
+    return df['users_active'].sum() / cs
 
 def fmt_pct(val):
     if val is None or (isinstance(val, float) and np.isnan(val)):
@@ -480,6 +479,58 @@ def main():
     color_map = get_version_color_map(versions_in_data)
 
     # =========================================================================
+    # FILTER COVERAGE PIE (shows what % of total users your filters cover)
+    # =========================================================================
+    if not ftue_df.empty and 'total_users' in ftue_df.columns:
+        total_all = int(ftue_df['total_users'].sum())
+        total_filtered = int(fdf['total_users'].sum()) if not fdf.empty and 'total_users' in fdf.columns else 0
+        total_excluded = total_all - total_filtered
+        pct_included = total_filtered / total_all * 100 if total_all > 0 else 0
+
+        st.markdown(f'<div class="legend-box" style="text-align:center;">'
+                    f'<b>Filter Coverage:</b> '
+                    f'<span style="color:#2ECB71;font-size:1.3em;font-weight:700;">{total_filtered:,}</span> '
+                    f'of {total_all:,} users selected '
+                    f'(<span style="color:#2ECB71;font-weight:600;">{pct_included:.1f}%</span>)'
+                    f'</div>', unsafe_allow_html=True)
+
+        fc1, fc2 = st.columns([1, 3])
+        with fc1:
+            fig_fc = go.Figure(data=[go.Pie(
+                labels=['Selected', 'Filtered Out'],
+                values=[total_filtered, total_excluded],
+                hole=0.55, textinfo='percent',
+                textfont=dict(size=13),
+                marker=dict(colors=[COLORS['after'], '#E8ECF0']),
+                hovertemplate='%{label}: %{value:,} users (%{percent})<extra></extra>',
+            )])
+            fig_fc.update_layout(
+                height=200, margin=dict(l=10, r=10, t=10, b=10),
+                paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                showlegend=False,
+                annotations=[dict(text=f"<b>{pct_included:.0f}%</b>", x=0.5, y=0.5,
+                                  font_size=18, font_color=COLORS['after'], showarrow=False)],
+            )
+            st.plotly_chart(fig_fc, use_container_width=True)
+        with fc2:
+            # Breakdown of what's included
+            if not fdf.empty:
+                bc_items = []
+                for ver in sorted(fdf['install_version_str'].unique(), key=version_sort_key):
+                    vu = int(fdf[fdf['install_version_str'] == ver]['total_users'].sum())
+                    bc_items.append(f"v{ver}: **{vu:,}**")
+                st.markdown("**By version:** " + " | ".join(bc_items))
+                if 'platform' in fdf.columns:
+                    plat_items = []
+                    for p in sorted(fdf['platform'].unique()):
+                        pu = int(fdf[fdf['platform'] == p]['total_users'].sum())
+                        plat_items.append(f"{p}: **{pu:,}**")
+                    st.markdown("**By platform:** " + " | ".join(plat_items))
+                date_min = fdf['install_date'].min() if 'install_date' in fdf.columns else 'N/A'
+                date_max = fdf['install_date'].max() if 'install_date' in fdf.columns else 'N/A'
+                st.markdown(f"**Date range:** {date_min} to {date_max}")
+
+    # =========================================================================
     # TABS
     # =========================================================================
     tab_ba, tab_funnel, tab_installs, tab_daily_steps, tab_retention, tab_daily_retention = st.tabs([
@@ -537,9 +588,9 @@ def main():
             has_after_ret = not vdf_ret_after.empty
             for rd in [1, 3, 7, 14]:
                 rb = weighted_retention(vdf_ret_before[vdf_ret_before['days_since_install'] == rd])
-                nb = vdf_ret_before[(vdf_ret_before['days_since_install'] == rd) & (vdf_ret_before['users_active'] > 0)]['cohort_size'].sum()
+                nb = vdf_ret_before[vdf_ret_before['days_since_install'] == rd]['cohort_size'].sum()
                 ra = weighted_retention(vdf_ret_after[vdf_ret_after['days_since_install'] == rd])
-                na = vdf_ret_after[(vdf_ret_after['days_since_install'] == rd) & (vdf_ret_after['users_active'] > 0)]['cohort_size'].sum()
+                na = vdf_ret_after[vdf_ret_after['days_since_install'] == rd]['cohort_size'].sum()
                 ret_data[rd] = {'before': rb, 'after': ra, 'nb': nb, 'na': na}
 
         # --- SUMMARY ---
@@ -801,7 +852,7 @@ def main():
             for ret_d in [1, 3]:
                 daily_ret = []
                 for dt, gdf in vdf_ret.groupby('date'):
-                    ddf = gdf[(gdf['days_since_install'] == ret_d) & (gdf['users_active'] > 0)]
+                    ddf = gdf[gdf['days_since_install'] == ret_d]
                     cs, ua = ddf['cohort_size'].sum(), ddf['users_active'].sum()
                     ret = ua / cs if cs > 0 else None
                     cohort_d0 = gdf[gdf['days_since_install'] == 0]['cohort_size'].sum()
@@ -1222,7 +1273,7 @@ def main():
             for ver in rv:
                 sub = cdf[cdf['app_version'] == ver]
                 for d in range(0, md + 1):
-                    ds = sub[(sub['days_since_install'] == d) & (sub['users_active'] > 0)]
+                    ds = sub[sub['days_since_install'] == d]
                     cs, ua = ds['cohort_size'].sum(), ds['users_active'].sum()
                     if cs > 0:
                         cr.append({'day': d, 'retention': ua / cs, 'version': ver, 'cohort': cs})
@@ -1282,7 +1333,7 @@ def main():
             rds = st.selectbox("Retention day", [1, 3, 7, 14], index=0, key="daily_ret_day")
             recs = []
             for (dt, ver), gdf in rdf.groupby(['date', 'app_version']):
-                ddf = gdf[(gdf['days_since_install'] == rds) & (gdf['users_active'] > 0)]
+                ddf = gdf[gdf['days_since_install'] == rds]
                 cs, ua = ddf['cohort_size'].sum(), ddf['users_active'].sum()
                 cd0 = gdf[gdf['days_since_install'] == 0]['cohort_size'].sum()
                 recs.append({'date': dt, 'version': ver, 'retention': ua / cs if cs > 0 else None, 'cohort': cd0})
@@ -1309,8 +1360,8 @@ def main():
                         vb = bret[(bret['app_version'] == ver) & (bret['days_since_install'] == rd)]
                         va = aret[(aret['app_version'] == ver) & (aret['days_since_install'] == rd)]
                         rb, ra = weighted_retention(vb), weighted_retention(va)
-                        nb = vb[vb['users_active'] > 0]['cohort_size'].sum()
-                        na = va[va['users_active'] > 0]['cohort_size'].sum()
+                        nb = vb['cohort_size'].sum()
+                        na = va['cohort_size'].sum()
                         row[f'D{rd} Before'] = fmt_pct(rb) if nb > 0 else 'N/A'
                         row[f'D{rd} After'] = fmt_pct(ra) if na > 0 else 'N/A'
                         row[f'D{rd} Delta'] = f"{ra - rb:+.2%}" if nb > 0 and na > 0 else 'N/A'
