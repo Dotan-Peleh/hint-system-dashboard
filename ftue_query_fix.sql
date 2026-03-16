@@ -365,23 +365,27 @@ funnel_flags AS (
       (NOT ue.is_buggy_ftue_flow3_version AND ue.mp_event_name = 'impression_ftue_flow3_step8' AND ue.chapter = 2)
     ) THEN 1 ELSE 0 END) AS step_42,
 
-    -- Step 43: ftue_flow12_step0 (constrain: only if user completed flow3_step8_ch2)
+    -- Step 43: ftue_flow12_step0 (requires how_to_play + flow3_step8_ch2)
     MAX(CASE WHEN ue.mp_event_name = 'impression_ftue_flow12_step0'
+          AND a.ts_how_to_play IS NOT NULL
           AND a.ts_flow3_step8_ch2 IS NOT NULL AND ue.res_timestamp >= a.ts_flow3_step8_ch2
           THEN 1 ELSE 0 END) AS step_43,
 
-    -- Step 44: ftue_flow12_step4 (constrain: only if user completed flow3_step8_ch2)
+    -- Step 44: ftue_flow12_step4 (requires how_to_play + flow3_step8_ch2)
     MAX(CASE WHEN ue.mp_event_name = 'impression_ftue_flow12_step4'
+          AND a.ts_how_to_play IS NOT NULL
           AND a.ts_flow3_step8_ch2 IS NOT NULL AND ue.res_timestamp >= a.ts_flow3_step8_ch2
           THEN 1 ELSE 0 END) AS step_44,
 
-    -- Step 45: scapes_tasks_new_chapter ch3 (constrain: after flow3_step8_ch2)
+    -- Step 45: scapes_tasks_new_chapter ch3 (requires how_to_play + after flow3_step8_ch2)
     MAX(CASE WHEN ue.mp_event_name = 'scapes_tasks_new_chapter' AND ue.chapter = 3
+          AND a.ts_how_to_play IS NOT NULL
           AND a.ts_flow3_step8_ch2 IS NOT NULL AND ue.res_timestamp >= a.ts_flow3_step8_ch2
           THEN 1 ELSE 0 END) AS step_45,
 
-    -- Step 46: click_harvest_collect ch3 (constrain: after flow3_step8_ch2)
+    -- Step 46: click_harvest_collect ch3 (requires how_to_play + after flow3_step8_ch2)
     MAX(CASE WHEN ue.mp_event_name = 'click_harvest_collect' AND ue.chapter = 3
+          AND a.ts_how_to_play IS NOT NULL
           AND a.ts_flow3_step8_ch2 IS NOT NULL AND ue.res_timestamp >= a.ts_flow3_step8_ch2
           THEN 1 ELSE 0 END) AS step_46
 
