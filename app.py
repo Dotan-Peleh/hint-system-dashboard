@@ -165,14 +165,44 @@ def load_ftue_data():
 
 
 @st.cache_data(ttl=600)
-def load_retention_data():
-    client = get_bq_client()
+def load_retention_data(_client, start_date, end_date):
     query = f"""
-    SELECT * FROM `{RETENTION_TABLE}`
-    WHERE date >= '2026-02-01'
-      AND SAFE_CAST(app_version AS FLOAT64) >= 0.38
+    WITH cohort AS (
+        SELECT
+            dp.distinct_id,
+            dp.install_date,
+            CAST(dp.first_app_version AS STRING) AS app_version,
+            CASE WHEN dp.first_country = 'US' THEN 1 ELSE 0 END AS is_usa,
+            dp.first_platform AS platform
+        FROM `yotam-395120.peerplay.dim_player` dp
+        WHERE dp.install_date >= '{start_date}'
+          AND dp.first_country NOT IN ('UA', 'IL', 'AM')
+          AND dp.distinct_id NOT IN (SELECT distinct_id FROM `yotam-395120.peerplay.potential_fraudsters`)
+    ),
+    days_array AS (
+        SELECT day_num FROM UNNEST(GENERATE_ARRAY(0, 90)) AS day_num
+    ),
+    cohort_days AS (
+        SELECT c.*, d.day_num AS days_since_install,
+            DATE_ADD(c.install_date, INTERVAL d.day_num DAY) AS activity_date
+        FROM cohort c
+        CROSS JOIN days_array d
+        WHERE DATE_ADD(c.install_date, INTERVAL d.day_num DAY) < CURRENT_DATE()
+    )
+    SELECT
+        cd.install_date AS date,
+        cd.app_version,
+        cd.platform,
+        cd.is_usa,
+        cd.days_since_install,
+        COUNT(DISTINCT cd.distinct_id) AS cohort_size,
+        COUNT(DISTINCT apd.distinct_id) AS users_active
+    FROM cohort_days cd
+    LEFT JOIN `yotam-395120.peerplay.agg_player_daily` apd
+        ON cd.distinct_id = apd.distinct_id AND cd.activity_date = apd.date
+    GROUP BY ALL
     """
-    df = client.query(query).to_dataframe()
+    df = _client.query(query).to_dataframe()
     df['date'] = pd.to_datetime(df['date']).dt.date
     return df
 
@@ -294,7 +324,7 @@ def main():
             st.error(f"Failed to load FTUE data: {e}")
             ftue_df = pd.DataFrame()
         try:
-            ret_df = load_retention_data()
+            ret_df = load_retention_data(get_bq_client(), '2026-03-01', str(date.today()))
         except Exception as e:
             st.error(f"Failed to load retention data: {e}")
             ret_df = pd.DataFrame()
@@ -415,15 +445,13 @@ def main():
 
         st.markdown("---")
         st.markdown("### Retention Filters")
-        selected_chapters, selected_dsi, selected_ep_vals = [], [], []
-        if not ret_df.empty:
-            chapter_opts = sorted(ret_df['chapter_bucket'].dropna().unique().tolist(), key=lambda x: int(str(x).replace('+', '')) if str(x).replace('+', '').isdigit() else 999)
-            selected_chapters = st.multiselect("Chapter Bucket", chapter_opts, default=chapter_opts)
-            dsi_opts = [b for b in DAYS_SINCE_INSTALL_BUCKET_ORDER if b in ret_df['days_since_install_bucket'].unique()]
-            selected_dsi = st.multiselect("Days Since Install Bucket", dsi_opts, default=dsi_opts)
-            ep_opts = sorted(ret_df['is_ever_paid'].dropna().unique().tolist())
-            selected_ep = st.multiselect("Is Ever Paid", [str(x) for x in ep_opts], default=[str(x) for x in ep_opts])
-            selected_ep_vals = [int(x) for x in selected_ep]
+        selected_usa_only = None
+        if not ret_df.empty and 'is_usa' in ret_df.columns:
+            usa_opt = st.selectbox("Country (Retention)", ["All", "US Only", "Non-US"], index=0, key="ret_usa")
+            if usa_opt == "US Only":
+                selected_usa_only = 1
+            elif usa_opt == "Non-US":
+                selected_usa_only = 0
 
         st.caption("Note: values in brackets show total users for each option.")
 
@@ -463,17 +491,13 @@ def main():
         if isinstance(date_range, (list, tuple)) and len(date_range) == 2:
             rdf = rdf[(rdf['date'] >= date_range[0]) & (rdf['date'] <= date_range[1])]
         if selected_period == "Before Test":
-            rdf = rdf[rdf['period'] == 'before']
+            rdf = rdf[rdf['date'] < TEST_START_DATE]
         elif selected_period == "After Test":
-            rdf = rdf[rdf['period'] == 'after']
+            rdf = rdf[rdf['date'] >= TEST_START_DATE]
         if selected_platforms:
             rdf = rdf[rdf['platform'].isin(selected_platforms)]
-        if selected_chapters:
-            rdf = rdf[rdf['chapter_bucket'].isin(selected_chapters)]
-        if selected_dsi:
-            rdf = rdf[rdf['days_since_install_bucket'].isin(selected_dsi)]
-        if selected_ep_vals:
-            rdf = rdf[rdf['is_ever_paid'].isin(selected_ep_vals)]
+        if selected_usa_only is not None and 'is_usa' in rdf.columns:
+            rdf = rdf[rdf['is_usa'] == selected_usa_only]
 
     versions_in_data = sorted(
         set(list(fdf['install_version_str'].unique()) if not fdf.empty else []) |
@@ -1442,27 +1466,7 @@ def main():
                     xaxis=dict(dtick=1 if md <= 14 else 5))
                 st.plotly_chart(fig, use_container_width=True)
 
-            st.markdown("---")
-            st.markdown("#### Per-User KPIs")
-            pu_kpis = {'Revenue / User': 'total_revenue', 'IAPs / User': 'total_iaps_revenue', 'Ads / User': 'total_ads_revenue',
-                       'Merges / User': 'total_merges', 'Generations / User': 'total_generations', 'Board Tasks / User': 'total_board_tasks_completed', 'Paid Rate': 'total_paid_today'}
-
-            for plat in platforms_in_data:
-                st.markdown(f"**{plat}**")
-                pdf = rdf[rdf['platform'] == plat] if 'platform' in rdf.columns else rdf
-                prows = []
-                for ver in rv:
-                    vdf = pdf[pdf['app_version'] == ver]
-                    dau = vdf['total_dau'].sum()
-                    if dau == 0:
-                        continue
-                    row = {'Version': ver}
-                    for lb, col in pu_kpis.items():
-                        val = vdf[col].sum() / dau if dau > 0 else 0
-                        row[lb] = fmt_money(val) if col in ['total_revenue', 'total_iaps_revenue', 'total_ads_revenue'] else f"{val:.4f}"
-                    prows.append(row)
-                if prows:
-                    st.dataframe(pd.DataFrame(prows), use_container_width=True, hide_index=True)
+            # Per-User KPIs removed — live retention query doesn't include revenue/activity columns
 
     # =========================================================================
     # TAB 4: DAILY RETENTION
