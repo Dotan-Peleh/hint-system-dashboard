@@ -327,6 +327,8 @@ def main():
         return labels, label_map, raw_vals
 
     with st.sidebar.form("filter_form"):
+        submitted = st.form_submit_button("Run Dashboard", type="primary", use_container_width=True)
+        st.markdown("---")
         st.markdown("### Install Date Range")
 
         all_dates = []
@@ -367,7 +369,9 @@ def main():
                 lbl = f"{rv} (ret only)"
                 ver_labels.append(lbl)
                 ver_map[lbl] = rv
-        selected_ver_labels = st.multiselect("Version", ver_labels, default=ver_labels)
+        # Default to 0.3811 only
+        default_ver = [l for l in ver_labels if l.startswith('0.3811')]
+        selected_ver_labels = st.multiselect("Version", ver_labels, default=default_ver if default_ver else ver_labels)
         selected_versions = [str(ver_map.get(l, l)) for l in selected_ver_labels]
 
         # Platform
@@ -422,8 +426,7 @@ def main():
 
         st.caption("Note: values in brackets show total users for each option.")
 
-        # --- RUN BUTTON ---
-        submitted = st.form_submit_button("Run Dashboard", type="primary", use_container_width=True)
+        # (Run button is at the top of the form)
 
     # =========================================================================
     # APPLY FILTERS
