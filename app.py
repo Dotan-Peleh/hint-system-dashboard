@@ -1181,7 +1181,7 @@ def main():
                     },
                 }
                 # Steps to suppress from the anomaly table (known/accepted)
-                suppressed_steps = {'09', '24'}
+                suppressed_steps = {'09'}
 
                 # Compute actual upticks from current data
                 all_step_vals = {}

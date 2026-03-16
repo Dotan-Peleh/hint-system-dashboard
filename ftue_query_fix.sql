@@ -253,109 +253,117 @@ funnel_flags AS (
           AND a.ts_how_to_play IS NOT NULL AND ue.res_timestamp >= a.ts_how_to_play
           THEN 1 ELSE 0 END) AS step_24,
 
-    -- Step 25: impression_dialog 10013 (constrain: between flow2_step0 and flow2_step1)
+    -- Step 25: impression_dialog 10013 (constrain: after how_to_play AND between flow2_step0 and flow2_step1)
     MAX(CASE WHEN ue.mp_event_name = 'impression_dialog' AND ue.dialog_id = '10013'
+          AND a.ts_how_to_play IS NOT NULL
           AND a.ts_flow2_step0 IS NOT NULL AND ue.res_timestamp >= a.ts_flow2_step0
           AND (a.ts_flow2_step1 IS NULL OR ue.res_timestamp <= a.ts_flow2_step1)
           THEN 1 ELSE 0 END) AS step_25,
 
-    -- Step 26: click_scapes_tasks_go_button (constrain: between flow2_step0 and flow2_step1)
+    -- Step 26: click_scapes_tasks_go_button (constrain: requires how_to_play, between flow2_step0 and flow2_step1)
     MAX(CASE WHEN ue.mp_event_name = 'click_scapes_tasks_go_button'
+          AND a.ts_how_to_play IS NOT NULL
           AND a.ts_flow2_step0 IS NOT NULL AND ue.res_timestamp >= a.ts_flow2_step0
           AND (a.ts_flow2_step1 IS NULL OR ue.res_timestamp <= a.ts_flow2_step1)
           THEN 1 ELSE 0 END) AS step_26,
 
-    -- Step 27: scapes_tasks_cash_deducted (constrain: between flow2_step0 and flow2_step1)
+    -- Step 27: scapes_tasks_cash_deducted (constrain: requires how_to_play, between flow2_step0 and flow2_step1)
     MAX(CASE WHEN ue.mp_event_name = 'scapes_tasks_cash_deducted'
+          AND a.ts_how_to_play IS NOT NULL
           AND a.ts_flow2_step0 IS NOT NULL AND ue.res_timestamp >= a.ts_flow2_step0
           AND (a.ts_flow2_step1 IS NULL OR ue.res_timestamp <= a.ts_flow2_step1)
           THEN 1 ELSE 0 END) AS step_27,
 
-    -- Step 28: rewards_scape_task (constrain: between flow2_step0 and flow2_step1)
+    -- Step 28: rewards_scape_task (constrain: requires how_to_play, between flow2_step0 and flow2_step1)
     MAX(CASE WHEN ue.mp_event_name = 'rewards_scape_task'
+          AND a.ts_how_to_play IS NOT NULL
           AND a.ts_flow2_step0 IS NOT NULL AND ue.res_timestamp >= a.ts_flow2_step0
           AND (a.ts_flow2_step1 IS NULL OR ue.res_timestamp <= a.ts_flow2_step1)
           THEN 1 ELSE 0 END) AS step_28,
 
-    -- Step 29: click_dialog_exit 10013 (constrain: between flow2_step0 and flow2_step1)
+    -- Step 29: click_dialog_exit 10013 (constrain: requires how_to_play, between flow2_step0 and flow2_step1)
     MAX(CASE WHEN ue.mp_event_name = 'click_dialog_exit' AND ue.dialog_id = '10013'
+          AND a.ts_how_to_play IS NOT NULL
           AND a.ts_flow2_step0 IS NOT NULL AND ue.res_timestamp >= a.ts_flow2_step0
           AND (a.ts_flow2_step1 IS NULL OR ue.res_timestamp <= a.ts_flow2_step1)
           THEN 1 ELSE 0 END) AS step_29,
 
-    -- Step 30: ftue_flow2_step1 (anchor)
-    MAX(CASE WHEN ue.mp_event_name = 'impression_ftue_flow2_step1' THEN 1 ELSE 0 END) AS step_30,
+    -- Step 30: ftue_flow2_step1 (anchor, requires how_to_play)
+    MAX(CASE WHEN ue.mp_event_name = 'impression_ftue_flow2_step1'
+          AND a.ts_how_to_play IS NOT NULL THEN 1 ELSE 0 END) AS step_30,
 
-    -- Step 31: impression_dialog 10015 (constrain: between flow2_step1 and flow2_step2)
+    -- Step 31: impression_dialog 10015 (constrain: requires how_to_play, between flow2_step1 and flow2_step2)
     MAX(CASE WHEN ue.mp_event_name = 'impression_dialog' AND ue.dialog_id = '10015'
+          AND a.ts_how_to_play IS NOT NULL
           AND a.ts_flow2_step1 IS NOT NULL AND ue.res_timestamp >= a.ts_flow2_step1
           AND (a.ts_flow2_step2 IS NULL OR ue.res_timestamp <= a.ts_flow2_step2)
           THEN 1 ELSE 0 END) AS step_31,
 
-    -- Step 32: ftue_flow2_step2 (anchor)
-    MAX(CASE WHEN ue.mp_event_name = 'impression_ftue_flow2_step2' THEN 1 ELSE 0 END) AS step_32,
+    -- Step 32: ftue_flow2_step2 (anchor, requires how_to_play)
+    MAX(CASE WHEN ue.mp_event_name = 'impression_ftue_flow2_step2'
+          AND a.ts_how_to_play IS NOT NULL THEN 1 ELSE 0 END) AS step_32,
 
-    -- Step 33: ship_animation (constrain: between flow2_step2 and flow2_step5)
+    -- Step 33: ship_animation (constrain: requires how_to_play, between flow2_step2 and flow2_step5)
     MAX(CASE WHEN ue.mp_event_name = 'impression_ship_animation_started'
+          AND a.ts_how_to_play IS NOT NULL
           AND a.ts_flow2_step2 IS NOT NULL AND ue.res_timestamp >= a.ts_flow2_step2
           AND (a.ts_flow2_step5 IS NULL OR ue.res_timestamp <= a.ts_flow2_step5)
           THEN 1 ELSE 0 END) AS step_33,
 
-    -- Step 34: ftue_flow2_step5 (anchor)
-    MAX(CASE WHEN ue.mp_event_name = 'impression_ftue_flow2_step5' THEN 1 ELSE 0 END) AS step_34,
+    -- Step 34: ftue_flow2_step5 (anchor, requires how_to_play)
+    MAX(CASE WHEN ue.mp_event_name = 'impression_ftue_flow2_step5'
+          AND a.ts_how_to_play IS NOT NULL THEN 1 ELSE 0 END) AS step_34,
 
-    -- Step 35: ftue_flow3_step0 (anchor, with buggy version handling)
-    MAX(CASE
-      WHEN ue.is_buggy_ftue_flow3_version AND ue.mp_event_name = 'impression_ftue_flow3_step1' THEN 1
-      WHEN NOT ue.is_buggy_ftue_flow3_version AND ue.mp_event_name = 'impression_ftue_flow3_step0' THEN 1
-      ELSE 0
-    END) AS step_35,
+    -- Step 35: ftue_flow3_step0 (anchor, requires how_to_play, buggy version handling)
+    MAX(CASE WHEN a.ts_how_to_play IS NOT NULL AND (
+      (ue.is_buggy_ftue_flow3_version AND ue.mp_event_name = 'impression_ftue_flow3_step1') OR
+      (NOT ue.is_buggy_ftue_flow3_version AND ue.mp_event_name = 'impression_ftue_flow3_step0')
+    ) THEN 1 ELSE 0 END) AS step_35,
 
-    -- Step 36: scapes_tasks_new_chapter ch2 (constrain: between flow3_step0 and flow3_step6_ch2)
+    -- Step 36: scapes_tasks_new_chapter ch2 (requires how_to_play, between flow3_step0 and flow3_step6_ch2)
     MAX(CASE WHEN ue.mp_event_name = 'scapes_tasks_new_chapter' AND ue.chapter = 2
+          AND a.ts_how_to_play IS NOT NULL
           AND a.ts_flow3_step0 IS NOT NULL AND ue.res_timestamp >= a.ts_flow3_step0
           AND (a.ts_flow3_step6_ch2 IS NULL OR ue.res_timestamp <= a.ts_flow3_step6_ch2)
           THEN 1 ELSE 0 END) AS step_36,
 
-    -- Step 37: ftue_flow3_step1 ch2 (anchor, with buggy version handling)
-    MAX(CASE
-      WHEN ue.is_buggy_ftue_flow3_version AND ue.mp_event_name = 'impression_ftue_flow3_step2' AND ue.chapter = 2 THEN 1
-      WHEN NOT ue.is_buggy_ftue_flow3_version AND ue.mp_event_name = 'impression_ftue_flow3_step1' AND ue.chapter = 2 THEN 1
-      ELSE 0
-    END) AS step_37,
+    -- Step 37: ftue_flow3_step1 ch2 (anchor, requires how_to_play, buggy version handling)
+    MAX(CASE WHEN a.ts_how_to_play IS NOT NULL AND (
+      (ue.is_buggy_ftue_flow3_version AND ue.mp_event_name = 'impression_ftue_flow3_step2' AND ue.chapter = 2) OR
+      (NOT ue.is_buggy_ftue_flow3_version AND ue.mp_event_name = 'impression_ftue_flow3_step1' AND ue.chapter = 2)
+    ) THEN 1 ELSE 0 END) AS step_37,
 
-    -- Step 38: ftue_flow3_step2 ch2 (anchor, with buggy version handling)
-    MAX(CASE
-      WHEN ue.is_buggy_ftue_flow3_version AND ue.mp_event_name = 'impression_ftue_flow3_step3' AND ue.chapter = 2 THEN 1
-      WHEN NOT ue.is_buggy_ftue_flow3_version AND ue.mp_event_name = 'impression_ftue_flow3_step2' AND ue.chapter = 2 THEN 1
-      ELSE 0
-    END) AS step_38,
+    -- Step 38: ftue_flow3_step2 ch2 (anchor, requires how_to_play, buggy version handling)
+    MAX(CASE WHEN a.ts_how_to_play IS NOT NULL AND (
+      (ue.is_buggy_ftue_flow3_version AND ue.mp_event_name = 'impression_ftue_flow3_step3' AND ue.chapter = 2) OR
+      (NOT ue.is_buggy_ftue_flow3_version AND ue.mp_event_name = 'impression_ftue_flow3_step2' AND ue.chapter = 2)
+    ) THEN 1 ELSE 0 END) AS step_38,
 
-    -- Step 39: click_harvest_collect ch2 (constrain: between flow3_step0 and flow3_step6_ch2)
+    -- Step 39: click_harvest_collect ch2 (requires how_to_play, between flow3_step0 and flow3_step6_ch2)
     MAX(CASE WHEN ue.mp_event_name = 'click_harvest_collect' AND ue.chapter = 2
+          AND a.ts_how_to_play IS NOT NULL
           AND a.ts_flow3_step0 IS NOT NULL AND ue.res_timestamp >= a.ts_flow3_step0
           AND (a.ts_flow3_step6_ch2 IS NULL OR ue.res_timestamp <= a.ts_flow3_step6_ch2)
           THEN 1 ELSE 0 END) AS step_39,
 
-    -- Step 40: ftue_flow3_step6 ch2 (anchor, with buggy version handling)
-    MAX(CASE
-      WHEN ue.is_buggy_ftue_flow3_version AND ue.mp_event_name = 'impression_ftue_flow3_step7' AND ue.chapter = 2 THEN 1
-      WHEN NOT ue.is_buggy_ftue_flow3_version AND ue.mp_event_name = 'impression_ftue_flow3_step6' AND ue.chapter = 2 THEN 1
-      ELSE 0
-    END) AS step_40,
+    -- Step 40: ftue_flow3_step6 ch2 (anchor, requires how_to_play, buggy version handling)
+    MAX(CASE WHEN a.ts_how_to_play IS NOT NULL AND (
+      (ue.is_buggy_ftue_flow3_version AND ue.mp_event_name = 'impression_ftue_flow3_step7' AND ue.chapter = 2) OR
+      (NOT ue.is_buggy_ftue_flow3_version AND ue.mp_event_name = 'impression_ftue_flow3_step6' AND ue.chapter = 2)
+    ) THEN 1 ELSE 0 END) AS step_40,
 
-    -- Step 41: click_reward_center (constrain: between flow3_step6_ch2 and flow3_step8_ch2)
+    -- Step 41: click_reward_center (requires how_to_play, between flow3_step6_ch2 and flow3_step8_ch2)
     MAX(CASE WHEN ue.mp_event_name = 'click_reward_center'
+          AND a.ts_how_to_play IS NOT NULL
           AND a.ts_flow3_step6_ch2 IS NOT NULL AND ue.res_timestamp >= a.ts_flow3_step6_ch2
           AND (a.ts_flow3_step8_ch2 IS NULL OR ue.res_timestamp <= a.ts_flow3_step8_ch2)
           THEN 1 ELSE 0 END) AS step_41,
 
-    -- Step 42: ftue_flow3_step8 ch2 (anchor, with buggy version handling)
-    MAX(CASE
-      WHEN ue.is_buggy_ftue_flow3_version AND ue.mp_event_name = 'impression_ftue_flow3_step9' AND ue.chapter = 2 THEN 1
-      WHEN NOT ue.is_buggy_ftue_flow3_version AND ue.mp_event_name = 'impression_ftue_flow3_step8' AND ue.chapter = 2 THEN 1
-      ELSE 0
-    END) AS step_42,
+    -- Step 42: ftue_flow3_step8 ch2 (anchor, requires how_to_play, buggy version handling)
+    MAX(CASE WHEN a.ts_how_to_play IS NOT NULL AND (
+      (ue.is_buggy_ftue_flow3_version AND ue.mp_event_name = 'impression_ftue_flow3_step9' AND ue.chapter = 2) OR
+      (NOT ue.is_buggy_ftue_flow3_version AND ue.mp_event_name = 'impression_ftue_flow3_step8' AND ue.chapter = 2)
+    ) THEN 1 ELSE 0 END) AS step_42,
 
     -- Step 43: ftue_flow12_step0 (constrain: only if user completed flow3_step8_ch2)
     MAX(CASE WHEN ue.mp_event_name = 'impression_ftue_flow12_step0'
