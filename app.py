@@ -756,13 +756,19 @@ def main():
         else:
             # Pre-test baseline
             if vals_before:
-                c1, c2, c3 = st.columns(3)
+                c1, c2 = st.columns(2)
                 c1.metric("Users (Baseline)", fmt_number(users_before))
                 c2.metric("Last Step Conversion", f"{vals_before[-1]:.1%}" if vals_before else "N/A")
                 if dropoff_before:
-                    worst_do = max(dropoff_before)
-                    worst_idx = dropoff_before.index(worst_do)
-                    c3.metric("Worst Drop-off", f"{worst_do:.1%}", f"Step {worst_idx+1} -> {worst_idx+2}")
+                    # Top 3 drop-offs
+                    indexed_do = sorted(enumerate(dropoff_before), key=lambda x: -x[1])[:3]
+                    do_cols = st.columns(3)
+                    for rank, (do_col, (idx, do_val)) in enumerate(zip(do_cols, indexed_do)):
+                        do_col.metric(
+                            f"#{rank+1} Drop-off",
+                            f"{do_val:.1%}",
+                            f"{ba_step_labels[idx]} -> {ba_step_labels[idx+1]}",
+                        )
             if has_ret:
                 rc1, rc2, rc3, rc4 = st.columns(4)
                 for cw, rd in zip([rc1, rc2, rc3, rc4], [1, 3, 7, 14]):
