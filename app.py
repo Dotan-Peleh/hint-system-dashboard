@@ -1242,6 +1242,48 @@ def main():
                         st.markdown('<div class="legend-box">These are minor anomalies that have been investigated and accepted. They are caused by event timing or rounding, not real data issues.</div>', unsafe_allow_html=True)
                         st.dataframe(pd.DataFrame(known_upticks), use_container_width=True, hide_index=True)
 
+                # --- Biggest Drop-offs (attention needed) ---
+                st.markdown("#### Biggest Drop-offs")
+                st.markdown('<div class="legend-box">Steps with the largest user loss. '
+                            'These are the weakest points in the funnel — focus optimization efforts here.</div>',
+                            unsafe_allow_html=True)
+
+                for ver, vals in all_step_vals.items():
+                    if len(vals) < 2:
+                        continue
+                    dropoffs = []
+                    for i in range(1, len(vals)):
+                        curr_col, curr_val = vals[i]
+                        prev_col, prev_val = vals[i-1]
+                        if prev_val > 0:
+                            drop_abs = prev_val - curr_val
+                            drop_pct = drop_abs / prev_val * 100
+                            dropoffs.append({
+                                'from_label': format_step_label(prev_col),
+                                'to_label': format_step_label(curr_col),
+                                'from_val': prev_val,
+                                'to_val': curr_val,
+                                'drop_abs': drop_abs,
+                                'drop_pct': drop_pct,
+                            })
+
+                    # Sort by absolute drop (biggest first)
+                    dropoffs.sort(key=lambda x: -x['drop_abs'])
+                    top_drops = dropoffs[:5]
+
+                    if top_drops:
+                        drop_alerts = []
+                        for d in top_drops:
+                            severity = 'red' if d['drop_pct'] > 10 else ('yellow' if d['drop_pct'] > 5 else 'green')
+                            drop_alerts.append((severity,
+                                f"<b>{d['from_label']} → {d['to_label']}</b>: "
+                                f"loses <b>{d['drop_pct']:.1f}%</b> of users "
+                                f"({d['from_val']:.1%} → {d['to_val']:.1%}, "
+                                f"-{d['drop_abs']:.1%} absolute)"))
+                        if len(all_step_vals) > 1:
+                            st.markdown(f"**v{ver}**")
+                        render_alerts(drop_alerts)
+
     # =========================================================================
     # TAB: FTUE STEPS TREND BY DATE
     # =========================================================================
