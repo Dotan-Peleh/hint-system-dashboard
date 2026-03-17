@@ -274,7 +274,7 @@ def render_alerts(alerts):
     st.markdown(html, unsafe_allow_html=True)
 
 
-def calc_weighted_steps(subset, metrics_list):
+def calc_weighted_steps(subset, metrics_list, monotonic=True):
     tu = subset['total_users'].sum() if 'total_users' in subset.columns else len(subset)
     vals = []
     for m in metrics_list:
@@ -283,6 +283,10 @@ def calc_weighted_steps(subset, metrics_list):
         else:
             val = subset[m].mean() if not subset.empty else 0
         vals.append(val)
+    if monotonic and vals:
+        for i in range(1, len(vals)):
+            if vals[i] > vals[i - 1]:
+                vals[i] = vals[i - 1]
     return vals, tu
 
 def add_test_start_line(fig):
