@@ -12,7 +12,7 @@ from datetime import date, datetime
 # =============================================================================
 
 BQ_PROJECT = "yotam-395120"
-FTUE_TABLE = f"{BQ_PROJECT}.peerplay.ftue_dashboard"
+FTUE_TABLE = f"{BQ_PROJECT}.peerplay.ftue_dashboard_fixed"
 RETENTION_TABLE = f"{BQ_PROJECT}.peerplay.hint_system_ab_test_results"
 
 TEST_START_DATE = date(2026, 3, 17)

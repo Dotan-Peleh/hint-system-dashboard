@@ -2,7 +2,7 @@
 -- Generic events are now constrained to occur between their surrounding FTUE flow steps
 -- This prevents counting events that happen outside the scripted FTUE flow
 
-CREATE OR REPLACE TABLE peerplay.ftue_dashboard
+CREATE OR REPLACE TABLE peerplay.ftue_dashboard_fixed
 partition by install_date
 AS
 
