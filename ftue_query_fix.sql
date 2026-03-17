@@ -33,6 +33,12 @@ installs AS (
   SELECT
     p.distinct_id,
     p.install_date,
+    -- Extract install hour from first_event_time (only when it matches install_date)
+    CASE
+      WHEN DATE(p.first_event_time) = p.install_date
+      THEN EXTRACT(HOUR FROM p.first_event_time)
+      ELSE 12  -- default to noon for mismatched timestamps
+    END AS install_hour,
     DATE_TRUNC(p.install_date, WEEK(MONDAY)) AS install_week,
     DATE_TRUNC(p.install_date, MONTH) AS install_month,
     p.first_app_version AS install_version,
@@ -78,6 +84,7 @@ user_events AS (
     e.counter_per_session_game_side,
     CAST(e.dialog_id AS STRING) AS dialog_id,
     i.install_date,
+    i.install_hour,
     i.install_week,
     i.install_month,
     i.install_version,
@@ -133,6 +140,7 @@ funnel_flags AS (
   SELECT
     ue.distinct_id,
     ue.install_date,
+    ue.install_hour,
     ue.install_week,
     ue.install_month,
     ue.install_version,
@@ -479,13 +487,14 @@ funnel_flags AS (
 
   FROM user_events ue
   LEFT JOIN ftue_anchors a ON ue.distinct_id = a.distinct_id
-  GROUP BY ue.distinct_id, ue.install_date, ue.install_week, ue.install_month, ue.install_version, ue.platform, ue.country, ue.is_low_payers_country, ue.mediasource
+  GROUP BY ue.distinct_id, ue.install_date, ue.install_hour, ue.install_week, ue.install_month, ue.install_version, ue.platform, ue.country, ue.is_low_payers_country, ue.mediasource
 ),
 
 -- Aggregate funnel metrics by all dimensions
 version_aggregates AS (
   SELECT
     install_date,
+    install_hour,
     install_week,
     install_month,
     install_version,
@@ -511,11 +520,11 @@ version_aggregates AS (
     SUM(step_43) AS step_43, SUM(step_44) AS step_44, SUM(step_45) AS step_45,
     SUM(step_46) AS step_46
   FROM funnel_flags
-  GROUP BY install_date, install_week, install_month, install_version, platform, country, is_low_payers_country, mediasource
+  GROUP BY install_date, install_hour, install_week, install_month, install_version, platform, country, is_low_payers_country, mediasource
 )
 
 SELECT
-  v.install_date, v.install_week, v.install_month, v.install_version,
+  v.install_date, v.install_hour, v.install_week, v.install_month, v.install_version,
   v.platform, v.country, v.is_low_payers_country, v.mediasource,
   COALESCE(m.media_type, CASE WHEN v.mediasource = 'organic' THEN 'organic' ELSE 'none' END) AS media_type,
   v.total_users,

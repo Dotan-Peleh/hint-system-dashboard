@@ -387,11 +387,15 @@ def main():
         min_date = min(all_dates) if all_dates else date(2026, 2, 1)
         max_date = max(all_dates) if all_dates else date.today()
 
-        sd_col, ed_col = st.columns(2)
+        sd_col, sh_col, ed_col, eh_col = st.columns([2, 1, 2, 1])
         with sd_col:
             start_date = st.date_input("Start Date", value=min_date, min_value=min_date, max_value=max_date, key="sd")
+        with sh_col:
+            start_hour = st.number_input("Hour", min_value=0, max_value=23, value=0, key="sd_hour")
         with ed_col:
             end_date = st.date_input("End Date", value=max_date, min_value=min_date, max_value=max_date, key="ed")
+        with eh_col:
+            end_hour = st.number_input("Hour", min_value=0, max_value=23, value=23, key="ed_hour")
         date_range = (start_date, end_date)
 
         st.markdown("---")
@@ -482,6 +486,10 @@ def main():
         out['install_version_str'] = out['install_version'].astype(str)
         if 'install_date' in out.columns and isinstance(date_range, (list, tuple)) and len(date_range) == 2:
             out = out[(out['install_date'] >= date_range[0]) & (out['install_date'] <= date_range[1])]
+            # Apply hour filters on boundary dates
+            if 'install_hour' in out.columns:
+                out = out[~((out['install_date'] == date_range[0]) & (out['install_hour'] < start_hour))]
+                out = out[~((out['install_date'] == date_range[1]) & (out['install_hour'] > end_hour))]
         if selected_platforms and 'platform' in out.columns:
             out = out[out['platform'].isin(selected_platforms)]
         if selected_countries is not None and 'country' in out.columns:
@@ -675,11 +683,19 @@ def main():
             key=version_sort_key, reverse=True
         )
 
-        def ba_installs(ver, ds, de):
+        def ba_filter_date_hour(df, ds, de, sh=0, eh=23):
+            """Filter dataframe by date range + hour boundaries."""
+            out = df[(df['install_date'] >= ds) & (df['install_date'] <= de)]
+            if 'install_hour' in out.columns:
+                out = out[~((out['install_date'] == ds) & (out['install_hour'] < sh))]
+                out = out[~((out['install_date'] == de) & (out['install_hour'] > eh))]
+            return out
+
+        def ba_installs(ver, ds, de, sh=0, eh=23):
             if fdf_ba.empty:
                 return 0
-            vdf = fdf_ba[(fdf_ba['install_version_str'] == str(ver)) &
-                         (fdf_ba['install_date'] >= ds) & (fdf_ba['install_date'] <= de)]
+            vdf = fdf_ba[fdf_ba['install_version_str'] == str(ver)]
+            vdf = ba_filter_date_hour(vdf, ds, de, sh, eh)
             return int(vdf['total_users'].sum()) if 'total_users' in vdf.columns else len(vdf)
 
         col_before, col_vs, col_after = st.columns([5, 0.5, 5])
@@ -688,14 +704,18 @@ def main():
                         f'<b style="color:{COLORS["before"]};font-size:1.1em;">BEFORE</b></div>', unsafe_allow_html=True)
             before_versions = st.multiselect("Versions", ba_versions_available,
                 default=[ba_versions_available[0]] if ba_versions_available else [], key="ba_before_vers")
-            bc1, bc2 = st.columns(2)
+            bc1, bch1, bc2, bch2 = st.columns([2, 1, 2, 1])
             with bc1:
                 before_start = st.date_input("Start", value=ba_min_date, min_value=ba_min_date, max_value=ba_max_date, key="ba_before_start")
+            with bch1:
+                before_start_hour = st.number_input("Hour", min_value=0, max_value=23, value=0, key="ba_before_start_h")
             with bc2:
                 before_end_default = min(TEST_START_DATE - pd.Timedelta(days=1), ba_max_date) if TEST_START_DATE > ba_min_date else ba_max_date
                 before_end = st.date_input("End", value=before_end_default, min_value=ba_min_date, max_value=ba_max_date, key="ba_before_end")
+            with bch2:
+                before_end_hour = st.number_input("Hour", min_value=0, max_value=23, value=23, key="ba_before_end_h")
             if before_versions:
-                st.markdown(" | ".join([f"v{v}: **{ba_installs(v, before_start, before_end):,}**" for v in before_versions]))
+                st.markdown(" | ".join([f"v{v}: **{ba_installs(v, before_start, before_end, before_start_hour, before_end_hour):,}**" for v in before_versions]))
         with col_vs:
             st.markdown("<div style='text-align:center;padding-top:60px;font-size:1.8em;font-weight:bold;color:#7F8C8D;'>vs</div>", unsafe_allow_html=True)
         with col_after:
@@ -703,13 +723,17 @@ def main():
                         f'<b style="color:{COLORS["after"]};font-size:1.1em;">AFTER</b></div>', unsafe_allow_html=True)
             after_versions = st.multiselect("Versions", ba_versions_available,
                 default=[ba_versions_available[0]] if ba_versions_available else [], key="ba_after_vers")
-            ac1, ac2 = st.columns(2)
+            ac1, ach1, ac2, ach2 = st.columns([2, 1, 2, 1])
             with ac1:
                 after_start = st.date_input("Start", value=TEST_START_DATE if TEST_START_DATE <= ba_max_date else ba_min_date, min_value=ba_min_date, max_value=ba_max_date, key="ba_after_start")
+            with ach1:
+                after_start_hour = st.number_input("Hour", min_value=0, max_value=23, value=0, key="ba_after_start_h")
             with ac2:
                 after_end = st.date_input("End", value=ba_max_date, min_value=ba_min_date, max_value=ba_max_date, key="ba_after_end")
+            with ach2:
+                after_end_hour = st.number_input("Hour", min_value=0, max_value=23, value=23, key="ba_after_end_h")
             if after_versions:
-                st.markdown(" | ".join([f"v{v}: **{ba_installs(v, after_start, after_end):,}**" for v in after_versions]))
+                st.markdown(" | ".join([f"v{v}: **{ba_installs(v, after_start, after_end, after_start_hour, after_end_hour):,}**" for v in after_versions]))
 
         # --- Options ---
         opt1, opt2 = st.columns([2, 1])
@@ -740,14 +764,13 @@ def main():
             fig_ba = go.Figure()
 
             # --- Helper: compute and plot one group ---
-            def plot_group(versions, date_start, date_end, period_label, base_color, dash_avg):
+            def plot_group(versions, date_start, date_end, start_h, end_h, period_label, base_color, dash_avg):
                 group_all_vals = []
                 group_all_users = []
                 for ver in sorted(versions, key=version_sort_key):
                     ver_color = color_map.get(str(ver), '#333')
-                    vdf = fdf_ba[(fdf_ba['install_version_str'] == str(ver)) &
-                                 (fdf_ba['install_date'] >= date_start) &
-                                 (fdf_ba['install_date'] <= date_end)]
+                    vdf = fdf_ba[fdf_ba['install_version_str'] == str(ver)]
+                    vdf = ba_filter_date_hour(vdf, date_start, date_end, start_h, end_h)
                     vals, users = calc_weighted_steps(vdf, active_metrics)
                     if not vals or users == 0:
                         continue
@@ -791,8 +814,8 @@ def main():
                     return avg_vals, total_u
                 return None, 0
 
-            avg_before, users_before = plot_group(before_versions, before_start, before_end, "Before", COLORS['before'], 'solid')
-            avg_after, users_after = plot_group(after_versions, after_start, after_end, "After", COLORS['after'], 'dash')
+            avg_before, users_before = plot_group(before_versions, before_start, before_end, before_start_hour, before_end_hour, "Before", COLORS['before'], 'solid')
+            avg_after, users_after = plot_group(after_versions, after_start, after_end, after_start_hour, after_end_hour, "After", COLORS['after'], 'dash')
 
             # Lift annotations on funnel chart — every step
             if avg_before and avg_after:
@@ -885,11 +908,11 @@ def main():
                 pct_cols_do = get_pct_columns(fdf_ba)
                 do_labels = [format_step_label(m) for m in pct_cols_do]
                 # Recompute averages on pct metrics for drop-off
-                def compute_avg_pct(versions, ds, de):
+                def compute_avg_pct(versions, ds, de, sh=0, eh=23):
                     all_v, all_u = [], []
                     for ver in versions:
-                        vdf = fdf_ba[(fdf_ba['install_version_str'] == str(ver)) &
-                                     (fdf_ba['install_date'] >= ds) & (fdf_ba['install_date'] <= de)]
+                        vdf = fdf_ba[fdf_ba['install_version_str'] == str(ver)]
+                        vdf = ba_filter_date_hour(vdf, ds, de, sh, eh)
                         v, u = calc_weighted_steps(vdf, pct_cols_do)
                         if v and u > 0:
                             all_v.append(v); all_u.append(u)
@@ -898,8 +921,8 @@ def main():
                     tu = sum(all_u)
                     return [sum(all_v[j][i] * all_u[j] for j in range(len(all_v))) / tu for i in range(len(pct_cols_do))]
 
-                avg_b_pct = compute_avg_pct(before_versions, before_start, before_end)
-                avg_a_pct = compute_avg_pct(after_versions, after_start, after_end)
+                avg_b_pct = compute_avg_pct(before_versions, before_start, before_end, before_start_hour, before_end_hour)
+                avg_a_pct = compute_avg_pct(after_versions, after_start, after_end, after_start_hour, after_end_hour)
 
                 if avg_b_pct:
                     do_before = [(avg_b_pct[i] - avg_b_pct[i+1]) / avg_b_pct[i] if avg_b_pct[i] > 0 else 0 for i in range(len(avg_b_pct) - 1)]
