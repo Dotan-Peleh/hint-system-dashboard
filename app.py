@@ -284,7 +284,7 @@ def render_alerts(alerts):
     st.markdown(html, unsafe_allow_html=True)
 
 
-def calc_weighted_steps(subset, metrics_list, monotonic=True):
+def calc_weighted_steps(subset, metrics_list):
     tu = subset['total_users'].sum() if 'total_users' in subset.columns else len(subset)
     vals = []
     for m in metrics_list:
@@ -293,10 +293,6 @@ def calc_weighted_steps(subset, metrics_list, monotonic=True):
         else:
             val = subset[m].mean() if not subset.empty else 0
         vals.append(val)
-    if monotonic and vals:
-        for i in range(1, len(vals)):
-            if vals[i] > vals[i - 1]:
-                vals[i] = vals[i - 1]
     return vals, tu
 
 def add_test_start_line(fig):
@@ -1111,8 +1107,6 @@ def main():
                             for m in metrics:
                                 val = (pdf[m] * pdf['total_users']).sum() / tu if 'total_users' in pdf.columns and tu > 0 else pdf[m].mean()
                                 values.append(val)
-                            if metric_set == "Conversion vs Step 1":
-                                values = enforce_monotonic(values)
                             trace_name = f"v{ver} {period_label} ({tu:,.0f})"
                             if chart_type == "Line":
                                 fig.add_trace(go.Scatter(x=step_labels, y=values, mode='lines+markers', name=trace_name,
@@ -1127,8 +1121,6 @@ def main():
                         for m in metrics:
                             val = (vdf[m] * vdf['total_users']).sum() / tu if 'total_users' in vdf.columns and tu > 0 else vdf[m].mean()
                             values.append(val)
-                        if metric_set == "Conversion vs Step 1":
-                            values = enforce_monotonic(values)
                         if chart_type == "Line":
                             fig.add_trace(go.Scatter(x=step_labels, y=values, mode='lines+markers', name=str(ver),
                                 line=dict(color=ver_color, width=2), marker=dict(size=6),
@@ -1251,22 +1243,20 @@ def main():
                 # Steps to suppress from the anomaly table (known/accepted)
                 suppressed_steps = {'09'}
 
-                # Compute actual upticks from current data (after monotonic enforcement)
+                # Compute actual upticks from current data
                 all_step_vals = {}
                 for ver in sorted(fdf['install_version_str'].unique(), key=version_sort_key):
                     vdf = fdf[fdf['install_version_str'] == ver]
                     tu = vdf['total_users'].sum() if 'total_users' in vdf.columns else len(vdf)
                     if tu < 100:
                         continue
-                    raw_vals = []
+                    ver_vals = []
                     for m in pct_cols:
                         if 'total_users' in vdf.columns and tu > 0:
                             val = (vdf[m] * vdf['total_users']).sum() / tu
                         else:
                             val = vdf[m].mean()
-                        raw_vals.append(val)
-                    mono_vals = enforce_monotonic(raw_vals)
-                    ver_vals = [(pct_cols[i], mono_vals[i]) for i in range(len(pct_cols))]
+                        ver_vals.append((m, val))
                     all_step_vals[ver] = ver_vals
 
                 found_upticks = []
