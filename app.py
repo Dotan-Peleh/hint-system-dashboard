@@ -457,9 +457,6 @@ def main():
             sel_lp = st.selectbox("Is Low Payers", ["All"] + lp_labels, index=0)
             selected_low_payers = lp_map[sel_lp] if sel_lp != "All" else None
 
-        period_options = ["All", "Before Test", "After Test"]
-        selected_period = st.selectbox("Period (Before/After Test)", period_options, index=0)
-
         st.markdown("---")
         st.markdown("### Retention Filters")
         selected_usa_only = None
@@ -485,10 +482,6 @@ def main():
         out['install_version_str'] = out['install_version'].astype(str)
         if 'install_date' in out.columns and isinstance(date_range, (list, tuple)) and len(date_range) == 2:
             out = out[(out['install_date'] >= date_range[0]) & (out['install_date'] <= date_range[1])]
-        if selected_period == "Before Test":
-            out = out[out['install_date'] < TEST_START_DATE]
-        elif selected_period == "After Test":
-            out = out[out['install_date'] >= TEST_START_DATE]
         if selected_platforms and 'platform' in out.columns:
             out = out[out['platform'].isin(selected_platforms)]
         if selected_countries is not None and 'country' in out.columns:
@@ -511,43 +504,6 @@ def main():
         out = df.copy()
         if isinstance(date_range, (list, tuple)) and len(date_range) == 2:
             out = out[(out['install_date'] >= date_range[0]) & (out['install_date'] <= date_range[1])]
-        if selected_period == "Before Test":
-            out = out[out['install_date'] < TEST_START_DATE]
-        elif selected_period == "After Test":
-            out = out[out['install_date'] >= TEST_START_DATE]
-        if selected_platforms:
-            out = out[out['platform'].isin(selected_platforms)]
-        if selected_usa_only is not None and 'is_usa' in out.columns:
-            out = out[out['is_usa'] == selected_usa_only]
-        return out
-
-    # --- BA tab data: all sidebar filters EXCEPT date range, version, and period ---
-    # (BA tab has its own date pickers and version selectors)
-    def apply_ba_filters_ftue(df):
-        if df.empty:
-            return df
-        out = df.copy()
-        out['install_version_str'] = out['install_version'].astype(str)
-        if selected_platforms and 'platform' in out.columns:
-            out = out[out['platform'].isin(selected_platforms)]
-        if selected_countries is not None and 'country' in out.columns:
-            out = out[out['country'].isin(selected_countries)]
-        if selected_weeks and 'install_week' in out.columns:
-            out = out[out['install_week'].isin(selected_weeks)]
-        if selected_months and 'install_month' in out.columns:
-            out = out[out['install_month'].isin(selected_months)]
-        if selected_mediasource is not None and 'mediasource' in out.columns:
-            out = out[out['mediasource'].isin(selected_mediasource)]
-        if selected_media_type is not None and 'media_type' in out.columns:
-            out = out[out['media_type'].isin(selected_media_type)]
-        if selected_low_payers is not None and 'is_low_payers_country' in out.columns:
-            out = out[out['is_low_payers_country'] == selected_low_payers]
-        return out
-
-    def apply_ba_filters_ret(df):
-        if df.empty:
-            return df
-        out = df.copy()
         if selected_platforms:
             out = out[out['platform'].isin(selected_platforms)]
         if selected_usa_only is not None and 'is_usa' in out.columns:
@@ -558,9 +514,11 @@ def main():
     fdf_all = apply_non_version_filters_ftue(ftue_df if not ftue_df.empty else pd.DataFrame())
     rdf_all = apply_non_version_filters_ret(ret_df if not ret_df.empty else pd.DataFrame())
 
-    # BA tab data (independent of sidebar dates — BA tab has its own date pickers)
-    fdf_ba = apply_ba_filters_ftue(ftue_df if not ftue_df.empty else pd.DataFrame())
-    rdf_ba = apply_ba_filters_ret(ret_df if not ret_df.empty else pd.DataFrame())
+    # BA tab raw data (NO sidebar filters — BA tab has its own inline filters)
+    fdf_ba = ftue_df.copy() if not ftue_df.empty else pd.DataFrame()
+    if not fdf_ba.empty:
+        fdf_ba['install_version_str'] = fdf_ba['install_version'].astype(str)
+    rdf_ba = ret_df.copy() if not ret_df.empty else pd.DataFrame()
 
     # Sidebar-version-filtered data (for other tabs)
     fdf = fdf_all[fdf_all['install_version_str'].isin(selected_versions)].copy() if not fdf_all.empty else pd.DataFrame()
@@ -649,25 +607,74 @@ def main():
     # TAB 0: BEFORE VS AFTER
     # =========================================================================
     with tab_ba:
-        st.markdown('<div class="legend-box">'
-                    'Pick <b>versions + date range</b> independently for Before and After. '
-                    'Sidebar filters (platform, country, media source, etc.) apply here too — '
-                    'only <b>date range, version, and period</b> are controlled below instead of the sidebar. '
-                    '<strong style="color:#5B8DEF">Blue</strong> = Before &nbsp;&nbsp;'
-                    '<strong style="color:#2ECB71">Green</strong> = After'
-                    '</div>', unsafe_allow_html=True)
+        st.markdown('<div class="summary-box"><h4>Before vs After — Independent Analysis</h4>'
+                    'This tab has its <b>own filters</b> (below). Sidebar filters do NOT apply here. '
+                    'Pick versions + date ranges for each group, then compare. '
+                    '<strong style="color:#5B8DEF">Blue = Before</strong> &nbsp;&nbsp;'
+                    '<strong style="color:#2ECB71">Green = After</strong></div>', unsafe_allow_html=True)
 
-        # --- Date bounds (from raw data, NOT sidebar-filtered) ---
+        # =================================================================
+        # BA TAB INLINE FILTERS (completely independent from sidebar)
+        # =================================================================
+        with st.expander("Filters", expanded=False):
+            baf1, baf2, baf3 = st.columns(3)
+            with baf1:
+                ba_plat_opts = sorted(fdf_ba['platform'].dropna().unique().tolist()) if not fdf_ba.empty and 'platform' in fdf_ba.columns else []
+                ba_selected_platforms = st.multiselect("Platform", ba_plat_opts, default=ba_plat_opts, key="ba_f_plat")
+            with baf2:
+                ba_c_labels, ba_c_map, _ = opts_with_counts(fdf_ba, 'country') if not fdf_ba.empty else ([], {}, [])
+                ba_sel_c = st.multiselect("Country", ba_c_labels, default=[], key="ba_f_country")
+                ba_selected_countries = [ba_c_map[l] for l in ba_sel_c] if ba_sel_c else None
+            with baf3:
+                ba_lp_opts = sorted(fdf_ba['is_low_payers_country'].dropna().unique().tolist()) if not fdf_ba.empty and 'is_low_payers_country' in fdf_ba.columns else []
+                ba_lp_display = {0: 'No', 1: 'Yes'}
+                ba_lp_labels = [ba_lp_display.get(v, str(v)) for v in ba_lp_opts]
+                ba_lp_map = dict(zip(ba_lp_labels, ba_lp_opts))
+                ba_sel_lp = st.selectbox("Is Low Payers", ["All"] + ba_lp_labels, index=0, key="ba_f_lp")
+                ba_selected_low_payers = ba_lp_map[ba_sel_lp] if ba_sel_lp != "All" else None
+
+            baf4, baf5, baf6 = st.columns(3)
+            with baf4:
+                ba_ms_labels, ba_ms_map, _ = opts_with_counts(fdf_ba, 'mediasource') if not fdf_ba.empty else ([], {}, [])
+                ba_sel_ms = st.multiselect("Media Source", ba_ms_labels, default=[], key="ba_f_ms")
+                ba_selected_mediasource = [ba_ms_map[l] for l in ba_sel_ms] if ba_sel_ms else None
+            with baf5:
+                ba_mt_labels, ba_mt_map, _ = opts_with_counts(fdf_ba, 'media_type') if not fdf_ba.empty else ([], {}, [])
+                ba_sel_mt = st.multiselect("Media Type", ba_mt_labels, default=[], key="ba_f_mt")
+                ba_selected_media_type = [ba_mt_map[l] for l in ba_sel_mt] if ba_sel_mt else None
+            with baf6:
+                ba_usa_opt = st.selectbox("Country (Retention)", ["All", "US Only", "Non-US"], index=0, key="ba_f_usa")
+                ba_selected_usa_only = 1 if ba_usa_opt == "US Only" else (0 if ba_usa_opt == "Non-US" else None)
+
+        # --- Apply BA inline filters ---
+        if not fdf_ba.empty:
+            if ba_selected_platforms and 'platform' in fdf_ba.columns:
+                fdf_ba = fdf_ba[fdf_ba['platform'].isin(ba_selected_platforms)]
+            if ba_selected_countries is not None and 'country' in fdf_ba.columns:
+                fdf_ba = fdf_ba[fdf_ba['country'].isin(ba_selected_countries)]
+            if ba_selected_mediasource is not None and 'mediasource' in fdf_ba.columns:
+                fdf_ba = fdf_ba[fdf_ba['mediasource'].isin(ba_selected_mediasource)]
+            if ba_selected_media_type is not None and 'media_type' in fdf_ba.columns:
+                fdf_ba = fdf_ba[fdf_ba['media_type'].isin(ba_selected_media_type)]
+            if ba_selected_low_payers is not None and 'is_low_payers_country' in fdf_ba.columns:
+                fdf_ba = fdf_ba[fdf_ba['is_low_payers_country'] == ba_selected_low_payers]
+        if not rdf_ba.empty:
+            if ba_selected_platforms:
+                rdf_ba = rdf_ba[rdf_ba['platform'].isin(ba_selected_platforms)]
+            if ba_selected_usa_only is not None and 'is_usa' in rdf_ba.columns:
+                rdf_ba = rdf_ba[rdf_ba['is_usa'] == ba_selected_usa_only]
+
+        # =================================================================
+        # BEFORE / AFTER SELECTORS
+        # =================================================================
         ba_all_dates = sorted(fdf_ba['install_date'].dropna().unique().tolist()) if not fdf_ba.empty and 'install_date' in fdf_ba.columns else []
         ba_min_date = min(ba_all_dates) if ba_all_dates else date(2026, 2, 1)
         ba_max_date = max(ba_all_dates) if ba_all_dates else date.today()
-        # Versions from BA data (independent of sidebar)
         ba_versions_available = sorted(
             set(list(fdf_ba['install_version_str'].unique()) if not fdf_ba.empty else []),
             key=version_sort_key, reverse=True
         )
 
-        # Helper: get install count for a version in a date range
         def ba_installs(ver, ds, de):
             if fdf_ba.empty:
                 return 0
@@ -675,38 +682,36 @@ def main():
                          (fdf_ba['install_date'] >= ds) & (fdf_ba['install_date'] <= de)]
             return int(vdf['total_users'].sum()) if 'total_users' in vdf.columns else len(vdf)
 
-        # --- BEFORE group ---
-        st.markdown("#### Before")
-        b_col1, b_col2, b_col3 = st.columns([2, 1, 1])
-        with b_col1:
+        col_before, col_vs, col_after = st.columns([5, 0.5, 5])
+        with col_before:
+            st.markdown(f'<div style="background:#EBF5FB;padding:10px 16px;border-radius:8px;border-left:4px solid {COLORS["before"]};margin-bottom:12px;">'
+                        f'<b style="color:{COLORS["before"]};font-size:1.1em;">BEFORE</b></div>', unsafe_allow_html=True)
             before_versions = st.multiselect("Versions", ba_versions_available,
                 default=[ba_versions_available[0]] if ba_versions_available else [], key="ba_before_vers")
-        with b_col2:
-            before_start = st.date_input("Start", value=ba_min_date, min_value=ba_min_date, max_value=ba_max_date, key="ba_before_start")
-        with b_col3:
-            before_end_default = min(TEST_START_DATE - pd.Timedelta(days=1), ba_max_date) if TEST_START_DATE > ba_min_date else ba_max_date
-            before_end = st.date_input("End", value=before_end_default, min_value=ba_min_date, max_value=ba_max_date, key="ba_before_end")
-        # Show install counts per version
-        if before_versions:
-            counts_b = " | ".join([f"v{v}: **{ba_installs(v, before_start, before_end):,}** installs" for v in before_versions])
-            st.markdown(counts_b)
-
-        # --- AFTER group ---
-        st.markdown("#### After")
-        a_col1, a_col2, a_col3 = st.columns([2, 1, 1])
-        with a_col1:
+            bc1, bc2 = st.columns(2)
+            with bc1:
+                before_start = st.date_input("Start", value=ba_min_date, min_value=ba_min_date, max_value=ba_max_date, key="ba_before_start")
+            with bc2:
+                before_end_default = min(TEST_START_DATE - pd.Timedelta(days=1), ba_max_date) if TEST_START_DATE > ba_min_date else ba_max_date
+                before_end = st.date_input("End", value=before_end_default, min_value=ba_min_date, max_value=ba_max_date, key="ba_before_end")
+            if before_versions:
+                st.markdown(" | ".join([f"v{v}: **{ba_installs(v, before_start, before_end):,}**" for v in before_versions]))
+        with col_vs:
+            st.markdown("<div style='text-align:center;padding-top:60px;font-size:1.8em;font-weight:bold;color:#7F8C8D;'>vs</div>", unsafe_allow_html=True)
+        with col_after:
+            st.markdown(f'<div style="background:#EAFAF1;padding:10px 16px;border-radius:8px;border-left:4px solid {COLORS["after"]};margin-bottom:12px;">'
+                        f'<b style="color:{COLORS["after"]};font-size:1.1em;">AFTER</b></div>', unsafe_allow_html=True)
             after_versions = st.multiselect("Versions", ba_versions_available,
                 default=[ba_versions_available[0]] if ba_versions_available else [], key="ba_after_vers")
-        with a_col2:
-            after_start = st.date_input("Start", value=TEST_START_DATE if TEST_START_DATE <= ba_max_date else ba_min_date, min_value=ba_min_date, max_value=ba_max_date, key="ba_after_start")
-        with a_col3:
-            after_end = st.date_input("End", value=ba_max_date, min_value=ba_min_date, max_value=ba_max_date, key="ba_after_end")
-        # Show install counts per version
-        if after_versions:
-            counts_a = " | ".join([f"v{v}: **{ba_installs(v, after_start, after_end):,}** installs" for v in after_versions])
-            st.markdown(counts_a)
+            ac1, ac2 = st.columns(2)
+            with ac1:
+                after_start = st.date_input("Start", value=TEST_START_DATE if TEST_START_DATE <= ba_max_date else ba_min_date, min_value=ba_min_date, max_value=ba_max_date, key="ba_after_start")
+            with ac2:
+                after_end = st.date_input("End", value=ba_max_date, min_value=ba_min_date, max_value=ba_max_date, key="ba_after_end")
+            if after_versions:
+                st.markdown(" | ".join([f"v{v}: **{ba_installs(v, after_start, after_end):,}**" for v in after_versions]))
 
-        # --- Options row ---
+        # --- Options ---
         opt1, opt2 = st.columns([2, 1])
         with opt1:
             ba_metric_options = ["Conversion vs Step 1"]
