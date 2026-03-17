@@ -846,6 +846,29 @@ def main():
             )
             st.plotly_chart(fig_ba, use_container_width=True)
 
+            # --- Funnel start→finish summary ---
+            sc1, sc2 = st.columns(2)
+            with sc1:
+                st.markdown(f'<div style="background:#EBF5FB;border-left:4px solid {COLORS["before"]};padding:12px 18px;border-radius:0 8px 8px 0;">'
+                            f'<b style="color:{COLORS["before"]};">BEFORE</b><br>'
+                            f'Started: <b>{users_before:,.0f}</b> users<br>'
+                            f'Completed (last step): <b>{users_before * avg_before[-1]:,.0f}</b> users<br>'
+                            f'Start→Finish: <b>{avg_before[-1]:.1%}</b>'
+                            f'</div>' if avg_before and users_before > 0 else '', unsafe_allow_html=True)
+            with sc2:
+                st.markdown(f'<div style="background:#EAFAF1;border-left:4px solid {COLORS["after"]};padding:12px 18px;border-radius:0 8px 8px 0;">'
+                            f'<b style="color:{COLORS["after"]};">AFTER</b><br>'
+                            f'Started: <b>{users_after:,.0f}</b> users<br>'
+                            f'Completed (last step): <b>{users_after * avg_after[-1]:,.0f}</b> users<br>'
+                            f'Start→Finish: <b>{avg_after[-1]:.1%}</b>'
+                            f'</div>' if avg_after and users_after > 0 else '', unsafe_allow_html=True)
+            if avg_before and avg_after and avg_before[-1] > 0:
+                lift_start_finish = (avg_after[-1] - avg_before[-1]) / avg_before[-1] * 100
+                lift_color = COLORS['after'] if lift_start_finish > 0 else COLORS['negative']
+                st.markdown(f'<div style="text-align:center;padding:8px;font-size:1.1em;">'
+                            f'Start→Finish lift: <b style="color:{lift_color};font-size:1.3em;">{lift_start_finish:+.1f}%</b> '
+                            f'({avg_before[-1]:.1%} → {avg_after[-1]:.1%})</div>', unsafe_allow_html=True)
+
             # --- Summary metrics ---
             if avg_before and avg_after:
                 lifts_all = [(avg_after[i] - avg_before[i]) / avg_before[i] * 100 if avg_before[i] > 0 else 0 for i in range(len(avg_before))]
