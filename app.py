@@ -876,11 +876,12 @@ def main():
                             f'Start→Finish: <b>{avg_after[-1]:.1%}</b>'
                             f'</div>' if avg_after and users_after > 0 else '', unsafe_allow_html=True)
             if avg_before and avg_after and avg_before[-1] > 0:
-                lift_start_finish = (avg_after[-1] - avg_before[-1]) / avg_before[-1] * 100
-                lift_color = COLORS['after'] if lift_start_finish > 0 else COLORS['negative']
+                lift_pp = (avg_after[-1] - avg_before[-1]) * 100
+                lift_relative = (avg_after[-1] - avg_before[-1]) / avg_before[-1] * 100
+                lift_color = COLORS['after'] if lift_pp > 0 else COLORS['negative']
                 st.markdown(f'<div style="text-align:center;padding:8px;font-size:1.1em;">'
-                            f'Start→Finish lift: <b style="color:{lift_color};font-size:1.3em;">{lift_start_finish:+.1f}%</b> '
-                            f'({avg_before[-1]:.1%} → {avg_after[-1]:.1%})</div>', unsafe_allow_html=True)
+                            f'Start→Finish lift: <b style="color:{lift_color};font-size:1.3em;">{lift_pp:+.1f}pp</b> '
+                            f'({avg_before[-1]:.1%} → {avg_after[-1]:.1%}, {lift_relative:+.1f}% relative)</div>', unsafe_allow_html=True)
 
             # --- Summary metrics ---
             if avg_before and avg_after:
