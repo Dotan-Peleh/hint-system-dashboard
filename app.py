@@ -477,7 +477,7 @@ def main():
     # =========================================================================
     # APPLY FILTERS
     # =========================================================================
-    # --- Apply all filters EXCEPT version (for BA tab cross-version comparison) ---
+    # --- Apply non-version filters (respects sidebar dates) ---
     def apply_non_version_filters_ftue(df):
         if df.empty:
             return df
@@ -521,9 +521,41 @@ def main():
             out = out[out['is_usa'] == selected_usa_only]
         return out
 
-    # All-version filtered data (for BA tab version selector)
+    # --- BA tab data: only demographic filters, NO date/version/period from sidebar ---
+    def apply_ba_filters_ftue(df):
+        if df.empty:
+            return df
+        out = df.copy()
+        out['install_version_str'] = out['install_version'].astype(str)
+        if selected_platforms and 'platform' in out.columns:
+            out = out[out['platform'].isin(selected_platforms)]
+        if selected_countries is not None and 'country' in out.columns:
+            out = out[out['country'].isin(selected_countries)]
+        if selected_mediasource is not None and 'mediasource' in out.columns:
+            out = out[out['mediasource'].isin(selected_mediasource)]
+        if selected_media_type is not None and 'media_type' in out.columns:
+            out = out[out['media_type'].isin(selected_media_type)]
+        if selected_low_payers is not None and 'is_low_payers_country' in out.columns:
+            out = out[out['is_low_payers_country'] == selected_low_payers]
+        return out
+
+    def apply_ba_filters_ret(df):
+        if df.empty:
+            return df
+        out = df.copy()
+        if selected_platforms:
+            out = out[out['platform'].isin(selected_platforms)]
+        if selected_usa_only is not None and 'is_usa' in out.columns:
+            out = out[out['is_usa'] == selected_usa_only]
+        return out
+
+    # All-version filtered data (for other tabs, respects sidebar dates)
     fdf_all = apply_non_version_filters_ftue(ftue_df if not ftue_df.empty else pd.DataFrame())
     rdf_all = apply_non_version_filters_ret(ret_df if not ret_df.empty else pd.DataFrame())
+
+    # BA tab data (independent of sidebar dates — BA tab has its own date pickers)
+    fdf_ba = apply_ba_filters_ftue(ftue_df if not ftue_df.empty else pd.DataFrame())
+    rdf_ba = apply_ba_filters_ret(ret_df if not ret_df.empty else pd.DataFrame())
 
     # Sidebar-version-filtered data (for other tabs)
     fdf = fdf_all[fdf_all['install_version_str'].isin(selected_versions)].copy() if not fdf_all.empty else pd.DataFrame()
@@ -614,51 +646,75 @@ def main():
     with tab_ba:
         st.markdown('<div class="legend-box">'
                     'Pick <b>versions + date range</b> independently for Before and After. '
-                    'Each version is shown as a thin line; the <b>weighted average across versions</b> '
-                    'is the thick dashed line (eliminates daily and version noise). '
+                    'Each version line shows its weighted-average funnel for the selected dates. '
+                    'Toggle <b>Show Average</b> to overlay a combined average line across all versions in each group. '
                     '<strong style="color:#5B8DEF">Blue</strong> = Before &nbsp;&nbsp;'
                     '<strong style="color:#2ECB71">Green</strong> = After'
                     '</div>', unsafe_allow_html=True)
 
-        # --- Date bounds ---
-        ba_all_dates = sorted(fdf_all['install_date'].dropna().unique().tolist()) if not fdf_all.empty and 'install_date' in fdf_all.columns else []
+        # --- Date bounds (from raw data, NOT sidebar-filtered) ---
+        ba_all_dates = sorted(fdf_ba['install_date'].dropna().unique().tolist()) if not fdf_ba.empty and 'install_date' in fdf_ba.columns else []
         ba_min_date = min(ba_all_dates) if ba_all_dates else date(2026, 2, 1)
         ba_max_date = max(ba_all_dates) if ba_all_dates else date.today()
-        sorted_all_vers = sorted(all_versions, key=version_sort_key, reverse=True)
+        # Versions from BA data (independent of sidebar)
+        ba_versions_available = sorted(
+            set(list(fdf_ba['install_version_str'].unique()) if not fdf_ba.empty else []),
+            key=version_sort_key, reverse=True
+        )
+
+        # Helper: get install count for a version in a date range
+        def ba_installs(ver, ds, de):
+            if fdf_ba.empty:
+                return 0
+            vdf = fdf_ba[(fdf_ba['install_version_str'] == str(ver)) &
+                         (fdf_ba['install_date'] >= ds) & (fdf_ba['install_date'] <= de)]
+            return int(vdf['total_users'].sum()) if 'total_users' in vdf.columns else len(vdf)
 
         # --- BEFORE group ---
         st.markdown("#### Before")
         b_col1, b_col2, b_col3 = st.columns([2, 1, 1])
         with b_col1:
-            before_versions = st.multiselect("Versions (Before)", sorted_all_vers,
-                default=[sorted_all_vers[0]] if sorted_all_vers else [], key="ba_before_vers")
+            before_versions = st.multiselect("Versions", ba_versions_available,
+                default=[ba_versions_available[0]] if ba_versions_available else [], key="ba_before_vers")
         with b_col2:
             before_start = st.date_input("Start", value=ba_min_date, min_value=ba_min_date, max_value=ba_max_date, key="ba_before_start")
         with b_col3:
             before_end_default = min(TEST_START_DATE - pd.Timedelta(days=1), ba_max_date) if TEST_START_DATE > ba_min_date else ba_max_date
             before_end = st.date_input("End", value=before_end_default, min_value=ba_min_date, max_value=ba_max_date, key="ba_before_end")
+        # Show install counts per version
+        if before_versions:
+            counts_b = " | ".join([f"v{v}: **{ba_installs(v, before_start, before_end):,}** installs" for v in before_versions])
+            st.markdown(counts_b)
 
         # --- AFTER group ---
         st.markdown("#### After")
         a_col1, a_col2, a_col3 = st.columns([2, 1, 1])
         with a_col1:
-            after_versions = st.multiselect("Versions (After)", sorted_all_vers,
-                default=[sorted_all_vers[0]] if sorted_all_vers else [], key="ba_after_vers")
+            after_versions = st.multiselect("Versions", ba_versions_available,
+                default=[ba_versions_available[0]] if ba_versions_available else [], key="ba_after_vers")
         with a_col2:
             after_start = st.date_input("Start", value=TEST_START_DATE if TEST_START_DATE <= ba_max_date else ba_min_date, min_value=ba_min_date, max_value=ba_max_date, key="ba_after_start")
         with a_col3:
             after_end = st.date_input("End", value=ba_max_date, min_value=ba_min_date, max_value=ba_max_date, key="ba_after_end")
+        # Show install counts per version
+        if after_versions:
+            counts_a = " | ".join([f"v{v}: **{ba_installs(v, after_start, after_end):,}** installs" for v in after_versions])
+            st.markdown(counts_a)
 
-        # --- Metric set ---
-        ba_metric_options = ["Conversion vs Step 1"]
-        ratio_cols_ba = get_ratio_columns(fdf_all) if not fdf_all.empty else []
-        if ratio_cols_ba:
-            ba_metric_options.append("Conversion vs Previous Step")
-        ba_metric_set = st.selectbox("Metric set", ba_metric_options, key="ba_metric_set")
+        # --- Options row ---
+        opt1, opt2 = st.columns([2, 1])
+        with opt1:
+            ba_metric_options = ["Conversion vs Step 1"]
+            ratio_cols_ba = get_ratio_columns(fdf_ba) if not fdf_ba.empty else []
+            if ratio_cols_ba:
+                ba_metric_options.append("Conversion vs Previous Step")
+            ba_metric_set = st.selectbox("Metric set", ba_metric_options, key="ba_metric_set")
+        with opt2:
+            show_avg = st.checkbox("Show Average", value=True, key="ba_show_avg")
 
-        has_ftue = not fdf_all.empty
-        has_ret = not rdf_all.empty
-        pct_cols_ba = get_pct_columns(fdf_all) if has_ftue else []
+        has_ftue = not fdf_ba.empty
+        has_ret = not rdf_ba.empty
+        pct_cols_ba = get_pct_columns(fdf_ba) if has_ftue else []
 
         if not before_versions and not after_versions:
             st.warning("Select at least one version for Before or After.")
@@ -672,7 +728,6 @@ def main():
             st.markdown("---")
 
             fig_ba = go.Figure()
-            summary_rows = []
 
             # --- Helper: compute and plot one group ---
             def plot_group(versions, date_start, date_end, period_label, base_color, dash_avg):
@@ -680,42 +735,49 @@ def main():
                 group_all_users = []
                 for ver in sorted(versions, key=version_sort_key):
                     ver_color = color_map.get(str(ver), '#333')
-                    vdf = fdf_all[(fdf_all['install_version_str'] == str(ver)) &
-                                  (fdf_all['install_date'] >= date_start) &
-                                  (fdf_all['install_date'] <= date_end)]
+                    vdf = fdf_ba[(fdf_ba['install_version_str'] == str(ver)) &
+                                 (fdf_ba['install_date'] >= date_start) &
+                                 (fdf_ba['install_date'] <= date_end)]
                     vals, users = calc_weighted_steps(vdf, active_metrics)
                     if not vals or users == 0:
                         continue
                     group_all_vals.append(vals)
                     group_all_users.append(users)
-                    # Individual version line (thin, semi-transparent)
+                    # Individual version line
+                    line_opacity = 0.45 if show_avg else 0.9
+                    line_width = 1.5 if show_avg else 2.5
                     fig_ba.add_trace(go.Scatter(
                         x=active_labels, y=vals,
                         mode='lines+markers',
                         name=f"v{ver} {period_label} ({users:,.0f})",
-                        line=dict(color=ver_color, width=1.5,
+                        line=dict(color=ver_color, width=line_width,
                                   dash='solid' if period_label == 'Before' else 'dot'),
-                        marker=dict(size=4, symbol='circle' if period_label == 'Before' else 'diamond'),
-                        opacity=0.5,
-                        hovertemplate='<b>%{x}</b><br>v' + str(ver) + f' {period_label}' + ': %{y:.4f}<extra></extra>',
+                        marker=dict(size=4 if show_avg else 6,
+                                    symbol='circle' if period_label == 'Before' else 'diamond'),
+                        opacity=line_opacity,
+                        hovertemplate='<b>%{x}</b><br>v' + str(ver) + f' {period_label} ({users:,.0f})' + ': %{y:.4f}<extra></extra>',
                         legendgroup=period_label,
                     ))
-                # Weighted average line (thick, dashed)
-                if group_all_vals:
+                # Weighted average line
+                if group_all_vals and show_avg:
                     total_u = sum(group_all_users)
                     avg_vals = [sum(group_all_vals[j][i] * group_all_users[j] for j in range(len(group_all_vals))) / total_u
                                 for i in range(len(active_labels))]
-                    ver_names = ", ".join([f"v{v}" for v in versions])
                     fig_ba.add_trace(go.Scatter(
                         x=active_labels, y=avg_vals,
                         mode='lines+markers',
-                        name=f"AVG {period_label} ({total_u:,.0f} users)",
+                        name=f"AVG {period_label} ({total_u:,.0f})",
                         line=dict(color=base_color, width=3.5, dash=dash_avg),
                         marker=dict(size=8, symbol='circle' if period_label == 'Before' else 'diamond',
                                     line=dict(width=2, color='white')),
-                        hovertemplate='<b>%{x}</b><br>AVG ' + period_label + ': %{y:.4f}<extra></extra>',
+                        hovertemplate='<b>%{x}</b><br>AVG ' + period_label + f' ({total_u:,.0f})' + ': %{y:.4f}<extra></extra>',
                         legendgroup=period_label + '_avg',
                     ))
+                    return avg_vals, total_u
+                elif group_all_vals:
+                    total_u = sum(group_all_users)
+                    avg_vals = [sum(group_all_vals[j][i] * group_all_users[j] for j in range(len(group_all_vals))) / total_u
+                                for i in range(len(active_labels))]
                     return avg_vals, total_u
                 return None, 0
 
@@ -776,14 +838,14 @@ def main():
 
             # --- DROP-OFF comparison on averages ---
             if avg_before:
-                pct_cols_do = get_pct_columns(fdf_all)
+                pct_cols_do = get_pct_columns(fdf_ba)
                 do_labels = [format_step_label(m) for m in pct_cols_do]
                 # Recompute averages on pct metrics for drop-off
                 def compute_avg_pct(versions, ds, de):
                     all_v, all_u = [], []
                     for ver in versions:
-                        vdf = fdf_all[(fdf_all['install_version_str'] == str(ver)) &
-                                      (fdf_all['install_date'] >= ds) & (fdf_all['install_date'] <= de)]
+                        vdf = fdf_ba[(fdf_ba['install_version_str'] == str(ver)) &
+                                     (fdf_ba['install_date'] >= ds) & (fdf_ba['install_date'] <= de)]
                         v, u = calc_weighted_steps(vdf, pct_cols_do)
                         if v and u > 0:
                             all_v.append(v); all_u.append(u)
@@ -824,7 +886,7 @@ def main():
             st.markdown("### Retention: Before vs After")
             ret_comp = []
             for ver in sorted(set(list(before_versions) + list(after_versions)), key=version_sort_key):
-                vdf_ret = rdf_all[rdf_all['install_version'] == str(ver)]
+                vdf_ret = rdf_ba[rdf_ba['install_version'] == str(ver)]
                 in_before = ver in before_versions
                 in_after = ver in after_versions
                 vdf_ret_b = vdf_ret[(vdf_ret['install_date'] >= before_start) & (vdf_ret['install_date'] <= before_end)] if in_before else pd.DataFrame()
