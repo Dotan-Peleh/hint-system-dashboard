@@ -293,10 +293,9 @@ funnel_flags AS (
           AND (a.ts_flow2_step0 IS NULL OR ue.res_timestamp <= a.ts_flow2_step0)
           THEN 1 ELSE 0 END) AS step_22,
 
-    -- Step 23: click_scapes_button_board (after how_to_play, before flow2_step0, within 30min of how_to_play)
+    -- Step 23: click_scapes_button_board (after how_to_play, before flow2_step0 — no 30min, bounded by anchors)
     MAX(CASE WHEN ue.mp_event_name = 'click_scapes_button_board'
           AND a.ts_how_to_play IS NOT NULL AND ue.res_timestamp >= a.ts_how_to_play
-          AND (ue.res_timestamp - a.ts_how_to_play) / 60000 <= 30
           AND (a.ts_flow2_step0 IS NULL OR ue.res_timestamp <= a.ts_flow2_step0)
           THEN 1 ELSE 0 END) AS step_23,
 
@@ -393,11 +392,10 @@ funnel_flags AS (
           )
           THEN 1 ELSE 0 END) AS step_35,
 
-    -- Step 36: scapes_tasks_new_chapter ch2 (between flow3_step0 and flow3_step6_ch2, within 30min of flow3_step0)
+    -- Step 36: scapes_tasks_new_chapter ch2 (between flow3_step0 and flow3_step6_ch2 — no 30min, bounded by anchors)
     MAX(CASE WHEN ue.mp_event_name = 'scapes_tasks_new_chapter' AND ue.chapter = 2
           AND a.ts_how_to_play IS NOT NULL
           AND a.ts_flow3_step0 IS NOT NULL AND ue.res_timestamp >= a.ts_flow3_step0
-          AND (ue.res_timestamp - a.ts_flow3_step0) / 60000 <= 30
           AND (a.ts_flow3_step6_ch2 IS NULL OR ue.res_timestamp <= a.ts_flow3_step6_ch2)
           THEN 1 ELSE 0 END) AS step_36,
 
@@ -439,11 +437,10 @@ funnel_flags AS (
           )
           THEN 1 ELSE 0 END) AS step_40,
 
-    -- Step 41: click_reward_center (between flow3_step6_ch2 and flow3_step8_ch2, within 30min of flow3_step6_ch2)
+    -- Step 41: click_reward_center (between flow3_step6_ch2 and flow3_step8_ch2 — no 30min, bounded by anchors)
     MAX(CASE WHEN ue.mp_event_name = 'click_reward_center'
           AND a.ts_how_to_play IS NOT NULL
           AND a.ts_flow3_step6_ch2 IS NOT NULL AND ue.res_timestamp >= a.ts_flow3_step6_ch2
-          AND (ue.res_timestamp - a.ts_flow3_step6_ch2) / 60000 <= 30
           AND (a.ts_flow3_step8_ch2 IS NULL OR ue.res_timestamp <= a.ts_flow3_step8_ch2)
           THEN 1 ELSE 0 END) AS step_41,
 
