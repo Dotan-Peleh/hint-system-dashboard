@@ -177,11 +177,12 @@ def load_retention_data(_client, start_date, end_date):
         SELECT
             dp.distinct_id,
             dp.install_date,
-            CAST(dp.first_app_version AS STRING) AS app_version,
+            CAST(dp.first_app_version AS STRING) AS install_version,
             CASE WHEN dp.first_country = 'US' THEN 1 ELSE 0 END AS is_usa,
             dp.first_platform AS platform
         FROM `yotam-395120.peerplay.dim_player` dp
         WHERE dp.install_date >= '{start_date}'
+          AND dp.install_date <= '{end_date}'
           AND dp.first_country NOT IN ('UA', 'IL', 'AM')
           AND dp.distinct_id NOT IN (SELECT distinct_id FROM `yotam-395120.peerplay.potential_fraudsters`)
     ),
@@ -196,8 +197,8 @@ def load_retention_data(_client, start_date, end_date):
         WHERE DATE_ADD(c.install_date, INTERVAL d.day_num DAY) < CURRENT_DATE()
     )
     SELECT
-        cd.install_date AS date,
-        cd.app_version,
+        cd.install_date,
+        cd.install_version,
         cd.platform,
         cd.is_usa,
         cd.days_since_install,
@@ -209,7 +210,7 @@ def load_retention_data(_client, start_date, end_date):
     GROUP BY ALL
     """
     df = _client.query(query).to_dataframe()
-    df['date'] = pd.to_datetime(df['date']).dt.date
+    df['install_date'] = pd.to_datetime(df['install_date']).dt.date
     return df
 
 
@@ -382,7 +383,7 @@ def main():
         if not ftue_df.empty and 'install_date' in ftue_df.columns:
             all_dates.extend(ftue_df['install_date'].dropna().tolist())
         if not ret_df.empty:
-            all_dates.extend(ret_df['date'].dropna().tolist())
+            all_dates.extend(ret_df['install_date'].dropna().tolist())
         min_date = min(all_dates) if all_dates else date(2026, 2, 1)
         max_date = max(all_dates) if all_dates else date.today()
 
@@ -410,7 +411,7 @@ def main():
 
         # Version with user counts
         ver_labels, ver_map, ver_raw = opts_with_counts(ftue_df, 'install_version', sort_key=version_sort_key) if not ftue_df.empty else ([], {}, [])
-        ret_versions = sorted(ret_df['app_version'].dropna().unique().tolist(), key=version_sort_key) if not ret_df.empty else []
+        ret_versions = sorted(ret_df['install_version'].dropna().unique().tolist(), key=version_sort_key) if not ret_df.empty else []
         for rv in ret_versions:
             if str(rv) not in [str(v) for v in ver_raw]:
                 lbl = f"{rv} (ret only)"
@@ -503,13 +504,13 @@ def main():
 
     rdf = ret_df.copy() if not ret_df.empty else pd.DataFrame()
     if not rdf.empty:
-        rdf = rdf[rdf['app_version'].isin(selected_versions)]
+        rdf = rdf[rdf['install_version'].isin(selected_versions)]
         if isinstance(date_range, (list, tuple)) and len(date_range) == 2:
-            rdf = rdf[(rdf['date'] >= date_range[0]) & (rdf['date'] <= date_range[1])]
+            rdf = rdf[(rdf['install_date'] >= date_range[0]) & (rdf['install_date'] <= date_range[1])]
         if selected_period == "Before Test":
-            rdf = rdf[rdf['date'] < TEST_START_DATE]
+            rdf = rdf[rdf['install_date'] < TEST_START_DATE]
         elif selected_period == "After Test":
-            rdf = rdf[rdf['date'] >= TEST_START_DATE]
+            rdf = rdf[rdf['install_date'] >= TEST_START_DATE]
         if selected_platforms:
             rdf = rdf[rdf['platform'].isin(selected_platforms)]
         if selected_usa_only is not None and 'is_usa' in rdf.columns:
@@ -517,7 +518,7 @@ def main():
 
     versions_in_data = sorted(
         set(list(fdf['install_version_str'].unique()) if not fdf.empty else []) |
-        set(list(rdf['app_version'].unique()) if not rdf.empty else []),
+        set(list(rdf['install_version'].unique()) if not rdf.empty else []),
         key=version_sort_key
     )
     color_map = get_version_color_map(versions_in_data)
@@ -639,7 +640,7 @@ def main():
                 st.markdown("#### Retention Comparison")
                 ret_comp_mv = []
                 for ver in sorted(ba_versions, key=version_sort_key):
-                    vr = rdf[rdf['app_version'] == str(ver)]
+                    vr = rdf[rdf['install_version'] == str(ver)]
                     cd0 = vr[vr['days_since_install'] == 0]['cohort_size'].sum()
                     row = {'Version': ver, 'Cohort': fmt_number(cd0)}
                     for rd in [1, 3, 7, 14]:
@@ -689,9 +690,9 @@ def main():
         ret_data = {}
         has_after_ret = False
         if has_ret:
-            vdf_ret = rdf[rdf['app_version'] == str(ba_version)]
-            vdf_ret_before = vdf_ret[vdf_ret['date'] < TEST_START_DATE]
-            vdf_ret_after = vdf_ret[vdf_ret['date'] >= TEST_START_DATE]
+            vdf_ret = rdf[rdf['install_version'] == str(ba_version)]
+            vdf_ret_before = vdf_ret[vdf_ret['install_date'] < TEST_START_DATE]
+            vdf_ret_after = vdf_ret[vdf_ret['install_date'] >= TEST_START_DATE]
             has_after_ret = not vdf_ret_after.empty
             for rd in [1, 3, 7, 14]:
                 rb = weighted_retention(vdf_ret_before[vdf_ret_before['days_since_install'] == rd])
@@ -964,7 +965,7 @@ def main():
 
             for ret_d in [1, 3]:
                 daily_ret = []
-                for dt, gdf in vdf_ret.groupby('date'):
+                for dt, gdf in vdf_ret.groupby('install_date'):
                     ddf = gdf[(gdf['days_since_install'] == ret_d) & (gdf['users_active'] > 0)]
                     cs, ua = ddf['cohort_size'].sum(), ddf['users_active'].sum()
                     ret = ua / cs if cs > 0 else None
@@ -1069,7 +1070,7 @@ def main():
 
             pct_cols = get_pct_columns(fdf)
             ratio_cols = get_ratio_columns(fdf)
-            c1, c2 = st.columns(2)
+            c1, c2, c3 = st.columns(3)
             with c1:
                 chart_type = st.radio("Chart type", ["Bar", "Line"], index=1, horizontal=True, key="funnel_chart_type")
             with c2:
@@ -1077,23 +1078,48 @@ def main():
                 if pct_cols: m_opts.append("Conversion vs Step 1")
                 if ratio_cols: m_opts.append("Conversion vs Previous Step")
                 metric_set = st.selectbox("Metric set", m_opts, key="funnel_metric_set") if m_opts else None
+            with c3:
+                show_ba_split = st.checkbox("Show Before/After Split", key="funnel_ba_split")
             metrics = pct_cols if metric_set == "Conversion vs Step 1" else (ratio_cols if metric_set == "Conversion vs Previous Step" else pct_cols)
             if metrics:
                 step_labels = [format_step_label(m) for m in metrics]
                 fig = go.Figure()
                 for ver in sorted(fdf['install_version_str'].unique(), key=version_sort_key):
                     vdf = fdf[fdf['install_version_str'] == ver]
-                    tu = vdf['total_users'].sum() if 'total_users' in vdf.columns else len(vdf)
-                    values = []
-                    for m in metrics:
-                        val = (vdf[m] * vdf['total_users']).sum() / tu if 'total_users' in vdf.columns and tu > 0 else vdf[m].mean()
-                        values.append(val)
-                    if chart_type == "Line":
-                        fig.add_trace(go.Scatter(x=step_labels, y=values, mode='lines+markers', name=str(ver),
-                            line=dict(color=color_map.get(str(ver), '#333'), width=2), marker=dict(size=6),
-                            hovertemplate='<b>%{x}</b><br>v' + str(ver) + ': %{y:.4f}<extra></extra>'))
+                    ver_color = color_map.get(str(ver), '#333')
+                    if show_ba_split:
+                        for period_label, period_filter, dash_style, symbol in [
+                            ("Before", vdf['install_date'] < TEST_START_DATE, 'solid', 'circle'),
+                            ("After", vdf['install_date'] >= TEST_START_DATE, 'dash', 'diamond'),
+                        ]:
+                            pdf = vdf[period_filter]
+                            if pdf.empty:
+                                continue
+                            tu = pdf['total_users'].sum() if 'total_users' in pdf.columns else len(pdf)
+                            values = []
+                            for m in metrics:
+                                val = (pdf[m] * pdf['total_users']).sum() / tu if 'total_users' in pdf.columns and tu > 0 else pdf[m].mean()
+                                values.append(val)
+                            trace_name = f"v{ver} {period_label} ({tu:,.0f})"
+                            if chart_type == "Line":
+                                fig.add_trace(go.Scatter(x=step_labels, y=values, mode='lines+markers', name=trace_name,
+                                    line=dict(color=ver_color, width=2, dash=dash_style), marker=dict(size=6, symbol=symbol),
+                                    hovertemplate='<b>%{x}</b><br>' + trace_name + ': %{y:.4f}<extra></extra>'))
+                            else:
+                                fig.add_trace(go.Bar(x=step_labels, y=values, name=trace_name, marker_color=ver_color,
+                                    opacity=0.6 if period_label == "Before" else 1.0))
                     else:
-                        fig.add_trace(go.Bar(x=step_labels, y=values, name=str(ver), marker_color=color_map.get(str(ver), '#333')))
+                        tu = vdf['total_users'].sum() if 'total_users' in vdf.columns else len(vdf)
+                        values = []
+                        for m in metrics:
+                            val = (vdf[m] * vdf['total_users']).sum() / tu if 'total_users' in vdf.columns and tu > 0 else vdf[m].mean()
+                            values.append(val)
+                        if chart_type == "Line":
+                            fig.add_trace(go.Scatter(x=step_labels, y=values, mode='lines+markers', name=str(ver),
+                                line=dict(color=ver_color, width=2), marker=dict(size=6),
+                                hovertemplate='<b>%{x}</b><br>v' + str(ver) + ': %{y:.4f}<extra></extra>'))
+                        else:
+                            fig.add_trace(go.Bar(x=step_labels, y=values, name=str(ver), marker_color=ver_color))
                 # Add drop-off annotations to the chart for the first (or only) version
                 first_ver = sorted(fdf['install_version_str'].unique(), key=version_sort_key)[0]
                 fv_df = fdf[fdf['install_version_str'] == first_ver]
@@ -1703,18 +1729,18 @@ def main():
             st.warning("No retention data.")
         else:
             platforms_in_data = sorted(rdf['platform'].dropna().unique().tolist()) if 'platform' in rdf.columns else ['All']
-            rv = sorted(rdf['app_version'].unique().tolist(), key=version_sort_key)
+            rv = sorted(rdf['install_version'].unique().tolist(), key=version_sort_key)
             ret_days = [1, 3, 7, 14]
 
             # --- Smart alerts ---
             ret_alerts = []
-            has_post_ret_data = (rdf['date'] >= TEST_START_DATE).any()
+            has_post_ret_data = (rdf['install_date'] >= TEST_START_DATE).any()
             if has_post_ret_data:
                 ret_alerts.append(('green', '<b>Post-test retention data is available.</b> Compare D1/D3 values in the "Before vs After" tab for a detailed breakdown.'))
                 # Check if D1 improved for any version
                 for ver in rv:
-                    vdf_b = rdf[(rdf['app_version'] == ver) & (rdf['date'] < TEST_START_DATE) & (rdf['days_since_install'] == 1)]
-                    vdf_a = rdf[(rdf['app_version'] == ver) & (rdf['date'] >= TEST_START_DATE) & (rdf['days_since_install'] == 1)]
+                    vdf_b = rdf[(rdf['install_version'] == ver) & (rdf['install_date'] < TEST_START_DATE) & (rdf['days_since_install'] == 1)]
+                    vdf_a = rdf[(rdf['install_version'] == ver) & (rdf['install_date'] >= TEST_START_DATE) & (rdf['days_since_install'] == 1)]
                     rb, ra = weighted_retention(vdf_b), weighted_retention(vdf_a)
                     nb, na = vdf_b['cohort_size'].sum(), vdf_a['cohort_size'].sum()
                     if nb > 0 and na > 0:
@@ -1727,7 +1753,7 @@ def main():
                 ret_alerts.append(('yellow', '<b>Pre-test only.</b> Retention data is live from BigQuery. Post-test comparisons will appear here once users install after the test start date.'))
             # Small cohort warning
             for ver in rv:
-                cd0 = rdf[(rdf['app_version'] == ver) & (rdf['days_since_install'] == 0)]['cohort_size'].sum()
+                cd0 = rdf[(rdf['install_version'] == ver) & (rdf['days_since_install'] == 0)]['cohort_size'].sum()
                 if 0 < cd0 < 100:
                     ret_alerts.append(('yellow', f'<b>v{ver}</b> has only <b>{cd0:,.0f}</b> users in cohort — too small for reliable retention.'))
             render_alerts(ret_alerts)
@@ -1739,7 +1765,7 @@ def main():
                 trows = []
                 d1_vals = {}
                 for ver in rv:
-                    vdf = pdf[pdf['app_version'] == ver]
+                    vdf = pdf[pdf['install_version'] == ver]
                     cd0 = vdf[vdf['days_since_install'] == 0]['cohort_size'].sum()
                     if cd0 == 0:
                         continue
@@ -1765,32 +1791,69 @@ def main():
 
             st.markdown("---")
             st.markdown("#### Retention Curve")
-            ret_plat = st.radio("Platform", platforms_in_data, horizontal=True, key="ret_curve_plat")
-            dr = st.radio("Range", ["D7 (0-7)", "D14 (0-14)", "D30 (0-30)"], horizontal=True, index=1, key="ret_curve_range")
+            rc1, rc2, rc3, rc4 = st.columns(4)
+            with rc1:
+                ret_plat = st.radio("Platform", platforms_in_data, horizontal=True, key="ret_curve_plat")
+            with rc2:
+                dr = st.radio("Range", ["D7 (0-7)", "D14 (0-14)", "D30 (0-30)"], horizontal=True, index=1, key="ret_curve_range")
+            with rc3:
+                ret_ba_split = st.checkbox("Show Before/After Split", key="ret_ba_split")
             md = {"D7 (0-7)": 7, "D14 (0-14)": 14, "D30 (0-30)": 30}[dr]
             cdf = rdf[(rdf['days_since_install'] <= md) & (rdf['platform'] == ret_plat)] if 'platform' in rdf.columns else rdf[rdf['days_since_install'] <= md]
-            cr = []
-            for ver in rv:
-                sub = cdf[cdf['app_version'] == ver]
-                for d in range(0, md + 1):
-                    ds = sub[(sub['days_since_install'] == d) & (sub['users_active'] > 0)]
-                    cs, ua = ds['cohort_size'].sum(), ds['users_active'].sum()
-                    if cs > 0:
-                        cr.append({'day': d, 'retention': ua / cs, 'version': ver, 'cohort': cs})
-            cp = pd.DataFrame(cr)
-            if not cp.empty:
+
+            if ret_ba_split:
                 fig = go.Figure()
                 for ver in rv:
-                    vg = cp[cp['version'] == ver].sort_values('day')
-                    if vg.empty: continue
-                    fig.add_trace(go.Scatter(x=vg['day'], y=vg['retention'], mode='lines+markers',
-                        name=f"v{ver}", line=dict(color=color_map.get(ver, '#333'), width=2.5), marker=dict(size=5),
-                        customdata=vg[['cohort']].values,
-                        hovertemplate='Day %{x}<br>Ret: %{y:.2%}<br>Cohort: %{customdata[0]:,}<extra></extra>'))
-                apply_chart_theme(fig, title=dict(text=f"Retention Curve — {ret_plat}"), xaxis_title="Days Since Install",
+                    ver_color = color_map.get(ver, '#333')
+                    for period_label, period_filter, dash_style, symbol in [
+                        ("Before", cdf['install_date'] < TEST_START_DATE, 'solid', 'circle'),
+                        ("After", cdf['install_date'] >= TEST_START_DATE, 'dash', 'diamond'),
+                    ]:
+                        sub = cdf[(cdf['install_version'] == ver) & period_filter]
+                        if sub.empty:
+                            continue
+                        cr_period = []
+                        for d in range(0, md + 1):
+                            ds = sub[(sub['days_since_install'] == d) & (sub['users_active'] > 0)]
+                            cs, ua = ds['cohort_size'].sum(), ds['users_active'].sum()
+                            if cs > 0:
+                                cr_period.append({'day': d, 'retention': ua / cs, 'cohort': cs})
+                        if not cr_period:
+                            continue
+                        vg = pd.DataFrame(cr_period).sort_values('day')
+                        trace_name = f"v{ver} {period_label}"
+                        fig.add_trace(go.Scatter(x=vg['day'], y=vg['retention'], mode='lines+markers',
+                            name=trace_name, line=dict(color=ver_color, width=2.5, dash=dash_style),
+                            marker=dict(size=5, symbol=symbol),
+                            customdata=vg[['cohort']].values,
+                            hovertemplate='Day %{x}<br>Ret: %{y:.2%}<br>Cohort: %{customdata[0]:,}<extra>' + trace_name + '</extra>'))
+                apply_chart_theme(fig, title=dict(text=f"Retention Curve — {ret_plat} (Before vs After)"), xaxis_title="Days Since Install",
                     yaxis_title="Retention %", yaxis_tickformat='.1%', height=500, hovermode='x unified',
                     xaxis=dict(dtick=1 if md <= 14 else 5))
                 st.plotly_chart(fig, use_container_width=True)
+            else:
+                cr = []
+                for ver in rv:
+                    sub = cdf[cdf['install_version'] == ver]
+                    for d in range(0, md + 1):
+                        ds = sub[(sub['days_since_install'] == d) & (sub['users_active'] > 0)]
+                        cs, ua = ds['cohort_size'].sum(), ds['users_active'].sum()
+                        if cs > 0:
+                            cr.append({'day': d, 'retention': ua / cs, 'version': ver, 'cohort': cs})
+                cp = pd.DataFrame(cr)
+                if not cp.empty:
+                    fig = go.Figure()
+                    for ver in rv:
+                        vg = cp[cp['version'] == ver].sort_values('day')
+                        if vg.empty: continue
+                        fig.add_trace(go.Scatter(x=vg['day'], y=vg['retention'], mode='lines+markers',
+                            name=f"v{ver}", line=dict(color=color_map.get(ver, '#333'), width=2.5), marker=dict(size=5),
+                            customdata=vg[['cohort']].values,
+                            hovertemplate='Day %{x}<br>Ret: %{y:.2%}<br>Cohort: %{customdata[0]:,}<extra></extra>'))
+                    apply_chart_theme(fig, title=dict(text=f"Retention Curve — {ret_plat}"), xaxis_title="Days Since Install",
+                        yaxis_title="Retention %", yaxis_tickformat='.1%', height=500, hovermode='x unified',
+                        xaxis=dict(dtick=1 if md <= 14 else 5))
+                    st.plotly_chart(fig, use_container_width=True)
 
             # Per-User KPIs removed — live retention query doesn't include revenue/activity columns
 
@@ -1803,9 +1866,9 @@ def main():
         if rdf.empty:
             st.warning("No retention data.")
         else:
-            n_ret_days = rdf['date'].nunique()
-            has_post_ret = rdf[rdf['date'] >= TEST_START_DATE].shape[0] > 0
-            n_ret_vers = rdf['app_version'].nunique()
+            n_ret_days = rdf['install_date'].nunique()
+            has_post_ret = rdf[rdf['install_date'] >= TEST_START_DATE].shape[0] > 0
+            n_ret_vers = rdf['install_version'].nunique()
             st.markdown(f'<div class="summary-box"><h4>Quick Insights</h4>'
                         f'<b>{n_ret_days}</b> days of retention data across <b>{n_ret_vers}</b> versions. '
                         f'Select a retention day (D1/D3/D7/D14) to track.</div>', unsafe_allow_html=True)
@@ -1820,7 +1883,7 @@ def main():
 
             rds = st.selectbox("Retention day", [1, 3, 7, 14], index=0, key="daily_ret_day")
             recs = []
-            for (dt, ver), gdf in rdf.groupby(['date', 'app_version']):
+            for (dt, ver), gdf in rdf.groupby(['install_date', 'install_version']):
                 ddf = gdf[(gdf['days_since_install'] == rds) & (gdf['users_active'] > 0)]
                 cs, ua = ddf['cohort_size'].sum(), ddf['users_active'].sum()
                 cd0 = gdf[gdf['days_since_install'] == 0]['cohort_size'].sum()
@@ -1836,17 +1899,17 @@ def main():
                 st.plotly_chart(fig, use_container_width=True)
 
             st.markdown("#### Before vs After Retention")
-            bret = rdf[rdf['date'] < TEST_START_DATE]
-            aret = rdf[rdf['date'] >= TEST_START_DATE]
+            bret = rdf[rdf['install_date'] < TEST_START_DATE]
+            aret = rdf[rdf['install_date'] >= TEST_START_DATE]
             if aret.empty:
                 st.info("No post-test retention data yet.")
             else:
                 crows = []
-                for ver in sorted(rdf['app_version'].unique().tolist(), key=version_sort_key):
+                for ver in sorted(rdf['install_version'].unique().tolist(), key=version_sort_key):
                     row = {'Version': ver}
                     for rd in [1, 3, 7, 14]:
-                        vb = bret[(bret['app_version'] == ver) & (bret['days_since_install'] == rd)]
-                        va = aret[(aret['app_version'] == ver) & (aret['days_since_install'] == rd)]
+                        vb = bret[(bret['install_version'] == ver) & (bret['days_since_install'] == rd)]
+                        va = aret[(aret['install_version'] == ver) & (aret['days_since_install'] == rd)]
                         rb, ra = weighted_retention(vb), weighted_retention(va)
                         nb = vb[vb['users_active'] > 0]['cohort_size'].sum()
                         na = va[va['users_active'] > 0]['cohort_size'].sum()
