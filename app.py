@@ -477,51 +477,71 @@ def main():
     # =========================================================================
     # APPLY FILTERS
     # =========================================================================
-    fdf = ftue_df.copy() if not ftue_df.empty else pd.DataFrame()
-    if not fdf.empty:
-        fdf['install_version_str'] = fdf['install_version'].astype(str)
-        fdf = fdf[fdf['install_version_str'].isin(selected_versions)]
-        if 'install_date' in fdf.columns and isinstance(date_range, (list, tuple)) and len(date_range) == 2:
-            fdf = fdf[(fdf['install_date'] >= date_range[0]) & (fdf['install_date'] <= date_range[1])]
+    # --- Apply all filters EXCEPT version (for BA tab cross-version comparison) ---
+    def apply_non_version_filters_ftue(df):
+        if df.empty:
+            return df
+        out = df.copy()
+        out['install_version_str'] = out['install_version'].astype(str)
+        if 'install_date' in out.columns and isinstance(date_range, (list, tuple)) and len(date_range) == 2:
+            out = out[(out['install_date'] >= date_range[0]) & (out['install_date'] <= date_range[1])]
         if selected_period == "Before Test":
-            fdf = fdf[fdf['install_date'] < TEST_START_DATE]
+            out = out[out['install_date'] < TEST_START_DATE]
         elif selected_period == "After Test":
-            fdf = fdf[fdf['install_date'] >= TEST_START_DATE]
-        if selected_platforms and 'platform' in fdf.columns:
-            fdf = fdf[fdf['platform'].isin(selected_platforms)]
-        if selected_countries is not None and 'country' in fdf.columns:
-            fdf = fdf[fdf['country'].isin(selected_countries)]
-        if selected_weeks and 'install_week' in fdf.columns:
-            fdf = fdf[fdf['install_week'].isin(selected_weeks)]
-        if selected_months and 'install_month' in fdf.columns:
-            fdf = fdf[fdf['install_month'].isin(selected_months)]
-        if selected_mediasource is not None and 'mediasource' in fdf.columns:
-            fdf = fdf[fdf['mediasource'].isin(selected_mediasource)]
-        if selected_media_type is not None and 'media_type' in fdf.columns:
-            fdf = fdf[fdf['media_type'].isin(selected_media_type)]
-        if selected_low_payers is not None and 'is_low_payers_country' in fdf.columns:
-            fdf = fdf[fdf['is_low_payers_country'] == selected_low_payers]
+            out = out[out['install_date'] >= TEST_START_DATE]
+        if selected_platforms and 'platform' in out.columns:
+            out = out[out['platform'].isin(selected_platforms)]
+        if selected_countries is not None and 'country' in out.columns:
+            out = out[out['country'].isin(selected_countries)]
+        if selected_weeks and 'install_week' in out.columns:
+            out = out[out['install_week'].isin(selected_weeks)]
+        if selected_months and 'install_month' in out.columns:
+            out = out[out['install_month'].isin(selected_months)]
+        if selected_mediasource is not None and 'mediasource' in out.columns:
+            out = out[out['mediasource'].isin(selected_mediasource)]
+        if selected_media_type is not None and 'media_type' in out.columns:
+            out = out[out['media_type'].isin(selected_media_type)]
+        if selected_low_payers is not None and 'is_low_payers_country' in out.columns:
+            out = out[out['is_low_payers_country'] == selected_low_payers]
+        return out
 
-    rdf = ret_df.copy() if not ret_df.empty else pd.DataFrame()
-    if not rdf.empty:
-        rdf = rdf[rdf['install_version'].isin(selected_versions)]
+    def apply_non_version_filters_ret(df):
+        if df.empty:
+            return df
+        out = df.copy()
         if isinstance(date_range, (list, tuple)) and len(date_range) == 2:
-            rdf = rdf[(rdf['install_date'] >= date_range[0]) & (rdf['install_date'] <= date_range[1])]
+            out = out[(out['install_date'] >= date_range[0]) & (out['install_date'] <= date_range[1])]
         if selected_period == "Before Test":
-            rdf = rdf[rdf['install_date'] < TEST_START_DATE]
+            out = out[out['install_date'] < TEST_START_DATE]
         elif selected_period == "After Test":
-            rdf = rdf[rdf['install_date'] >= TEST_START_DATE]
+            out = out[out['install_date'] >= TEST_START_DATE]
         if selected_platforms:
-            rdf = rdf[rdf['platform'].isin(selected_platforms)]
-        if selected_usa_only is not None and 'is_usa' in rdf.columns:
-            rdf = rdf[rdf['is_usa'] == selected_usa_only]
+            out = out[out['platform'].isin(selected_platforms)]
+        if selected_usa_only is not None and 'is_usa' in out.columns:
+            out = out[out['is_usa'] == selected_usa_only]
+        return out
+
+    # All-version filtered data (for BA tab version selector)
+    fdf_all = apply_non_version_filters_ftue(ftue_df if not ftue_df.empty else pd.DataFrame())
+    rdf_all = apply_non_version_filters_ret(ret_df if not ret_df.empty else pd.DataFrame())
+
+    # Sidebar-version-filtered data (for other tabs)
+    fdf = fdf_all[fdf_all['install_version_str'].isin(selected_versions)].copy() if not fdf_all.empty else pd.DataFrame()
+    rdf = rdf_all[rdf_all['install_version'].isin(selected_versions)].copy() if not rdf_all.empty else pd.DataFrame()
+
+    # All available versions (across all data, not limited by sidebar version filter)
+    all_versions = sorted(
+        set(list(fdf_all['install_version_str'].unique()) if not fdf_all.empty else []) |
+        set(list(rdf_all['install_version'].unique()) if not rdf_all.empty else []),
+        key=version_sort_key
+    )
 
     versions_in_data = sorted(
         set(list(fdf['install_version_str'].unique()) if not fdf.empty else []) |
         set(list(rdf['install_version'].unique()) if not rdf.empty else []),
         key=version_sort_key
     )
-    color_map = get_version_color_map(versions_in_data)
+    color_map = get_version_color_map(all_versions)
 
     # =========================================================================
     # FILTER COVERAGE PIE (shows what % of total users your filters cover)
@@ -592,256 +612,137 @@ def main():
     # TAB 0: BEFORE VS AFTER
     # =========================================================================
     with tab_ba:
-        # --- Multi-version funnel comparison ---
+        st.markdown('<div class="legend-box">'
+                    'Select <b>independent date ranges</b> for Before and After periods. '
+                    'Data is <b>averaged (weighted by users)</b> across each period to eliminate daily noise. '
+                    '<strong style="color:#5B8DEF">Blue</strong> = Before &nbsp;&nbsp;'
+                    '<strong style="color:#2ECB71">Green</strong> = After'
+                    '</div>', unsafe_allow_html=True)
+
+        # --- Controls ---
         ba_versions = st.multiselect(
             "Select version(s) to compare",
-            sorted(versions_in_data, key=version_sort_key, reverse=True),
-            default=[sorted(versions_in_data, key=version_sort_key, reverse=True)[0]] if versions_in_data else [],
+            sorted(all_versions, key=version_sort_key, reverse=True),
+            default=[sorted(all_versions, key=version_sort_key, reverse=True)[0]] if all_versions else [],
             key="ba_versions",
         )
 
-        if not fdf.empty and ba_versions and len(ba_versions) > 1:
-            st.markdown("---")
-            st.markdown("### Multi-Version Funnel Comparison")
-            pct_cols_mv = get_pct_columns(fdf)
-            if pct_cols_mv:
-                mv_labels = [format_step_label(m) for m in pct_cols_mv]
-                fig_mv = go.Figure()
-                mv_summary = []
-                for ver in sorted(ba_versions, key=version_sort_key):
-                    vdf_mv = fdf[fdf['install_version_str'] == str(ver)]
-                    tu = vdf_mv['total_users'].sum() if 'total_users' in vdf_mv.columns else len(vdf_mv)
-                    mv_vals = []
-                    for m in pct_cols_mv:
-                        val = (vdf_mv[m] * vdf_mv['total_users']).sum() / tu if 'total_users' in vdf_mv.columns and tu > 0 else vdf_mv[m].mean()
-                        mv_vals.append(val)
-                    fig_mv.add_trace(go.Scatter(
-                        x=mv_labels, y=mv_vals,
-                        mode='lines+markers',
-                        name=f"v{ver} ({tu:,.0f} users)",
-                        line=dict(color=color_map.get(str(ver), '#333'), width=2.5),
-                        marker=dict(size=6),
-                        hovertemplate='<b>%{x}</b><br>v' + str(ver) + ': %{y:.4f}<extra></extra>',
-                    ))
-                    mv_summary.append({'Version': ver, 'Users': fmt_number(tu),
-                                       'Last Step': f"{mv_vals[-1]:.1%}" if mv_vals else 'N/A'})
+        # Date ranges for before/after
+        ba_all_dates = []
+        if not fdf_all.empty and 'install_date' in fdf_all.columns:
+            ba_all_dates = sorted(fdf_all['install_date'].dropna().unique().tolist())
+        ba_min_date = min(ba_all_dates) if ba_all_dates else date(2026, 2, 1)
+        ba_max_date = max(ba_all_dates) if ba_all_dates else date.today()
 
-                apply_chart_theme(fig_mv,
-                    title=dict(text="FTUE Funnel — Version Comparison"),
-                    xaxis_title="FTUE Steps", yaxis_title="Conversion Rate",
-                    height=550, hovermode='x unified',
-                    xaxis_tickangle=-45, xaxis=dict(tickfont=dict(size=9)),
-                    yaxis=dict(tickformat='.2f'), margin=dict(b=150, t=70))
-                st.plotly_chart(fig_mv, use_container_width=True)
-                st.dataframe(pd.DataFrame(mv_summary), use_container_width=True, hide_index=True)
+        bc1, bc2, bc3, bc4, bc5 = st.columns([1, 1, 0.2, 1, 1])
+        with bc1:
+            before_start = st.date_input("Before: Start", value=ba_min_date, min_value=ba_min_date, max_value=ba_max_date, key="ba_before_start")
+        with bc2:
+            before_end_default = min(TEST_START_DATE - pd.Timedelta(days=1), ba_max_date) if TEST_START_DATE > ba_min_date else ba_max_date
+            before_end = st.date_input("Before: End", value=before_end_default, min_value=ba_min_date, max_value=ba_max_date, key="ba_before_end")
+        with bc3:
+            st.markdown("<div style='text-align:center;padding-top:30px;font-size:1.5em;font-weight:bold;color:#7F8C8D;'>vs</div>", unsafe_allow_html=True)
+        with bc4:
+            after_start = st.date_input("After: Start", value=TEST_START_DATE if TEST_START_DATE <= ba_max_date else ba_min_date, min_value=ba_min_date, max_value=ba_max_date, key="ba_after_start")
+        with bc5:
+            after_end = st.date_input("After: End", value=ba_max_date, min_value=ba_min_date, max_value=ba_max_date, key="ba_after_end")
 
-            # Multi-version retention comparison
-            if not rdf.empty:
-                st.markdown("#### Retention Comparison")
-                ret_comp_mv = []
-                for ver in sorted(ba_versions, key=version_sort_key):
-                    vr = rdf[rdf['install_version'] == str(ver)]
-                    cd0 = vr[vr['days_since_install'] == 0]['cohort_size'].sum()
-                    row = {'Version': ver, 'Cohort': fmt_number(cd0)}
-                    for rd in [1, 3, 7, 14]:
-                        r = weighted_retention(vr[vr['days_since_install'] == rd])
-                        n = vr[vr['days_since_install'] == rd]['cohort_size'].sum()
-                        row[f'D{rd}'] = fmt_pct(r) if n > 0 else 'N/A'
-                    ret_comp_mv.append(row)
-                st.dataframe(pd.DataFrame(ret_comp_mv), use_container_width=True, hide_index=True)
+        ba_metric_options = ["Conversion vs Step 1"]
+        ratio_cols_ba = get_ratio_columns(fdf_all) if not fdf_all.empty else []
+        if ratio_cols_ba:
+            ba_metric_options.append("Conversion vs Previous Step")
+        ba_metric_set = st.selectbox("Metric set", ba_metric_options, key="ba_metric_set")
 
-        # --- Single version deep dive ---
-        ba_version = ba_versions[0] if ba_versions else (versions_in_data[0] if versions_in_data else None)
-        if not ba_version:
+        has_ftue = not fdf_all.empty
+        has_ret = not rdf_all.empty
+        pct_cols_ba = get_pct_columns(fdf_all) if has_ftue else []
+
+        if not ba_versions:
             st.warning("Select at least one version.")
-        else:
-            if len(ba_versions) > 1:
-                st.markdown("---")
-                st.markdown(f"### Single Version Deep Dive: v{ba_version}")
-                st.caption("Showing detailed before/after analysis for the first selected version.")
-
-        has_ftue = not fdf.empty
-        has_ret = not rdf.empty
-        pct_cols_ba = get_pct_columns(fdf) if has_ftue else []
-
-        vals_before, vals_after = [], []
-        users_before, users_after = 0, 0
-        ba_step_labels = []
-        dropoff_before, dropoff_after = [], []
-        has_after_ftue = False
-
-        if has_ftue and pct_cols_ba:
-            ba_step_labels = [format_step_label(m) for m in pct_cols_ba]
-            vdf_ba = fdf[fdf['install_version_str'] == str(ba_version)]
-            vdf_before = vdf_ba[vdf_ba['install_date'] < TEST_START_DATE]
-            vdf_after = vdf_ba[vdf_ba['install_date'] >= TEST_START_DATE]
-            has_after_ftue = not vdf_after.empty
-            vals_before, users_before = calc_weighted_steps(vdf_before, pct_cols_ba)
-            if has_after_ftue:
-                vals_after, users_after = calc_weighted_steps(vdf_after, pct_cols_ba)
-            for i in range(len(vals_before) - 1):
-                do = (vals_before[i] - vals_before[i + 1]) / vals_before[i] if vals_before[i] > 0 else 0
-                dropoff_before.append(do)
-            if has_after_ftue:
-                for i in range(len(vals_after) - 1):
-                    do = (vals_after[i] - vals_after[i + 1]) / vals_after[i] if vals_after[i] > 0 else 0
-                    dropoff_after.append(do)
-
-        ret_data = {}
-        has_after_ret = False
-        if has_ret:
-            vdf_ret = rdf[rdf['install_version'] == str(ba_version)]
-            vdf_ret_before = vdf_ret[vdf_ret['install_date'] < TEST_START_DATE]
-            vdf_ret_after = vdf_ret[vdf_ret['install_date'] >= TEST_START_DATE]
-            has_after_ret = not vdf_ret_after.empty
-            for rd in [1, 3, 7, 14]:
-                rb = weighted_retention(vdf_ret_before[vdf_ret_before['days_since_install'] == rd])
-                nb = vdf_ret_before[(vdf_ret_before['days_since_install'] == rd) & (vdf_ret_before['users_active'] > 0)]['cohort_size'].sum()
-                ra = weighted_retention(vdf_ret_after[vdf_ret_after['days_since_install'] == rd])
-                na = vdf_ret_after[(vdf_ret_after['days_since_install'] == rd) & (vdf_ret_after['users_active'] > 0)]['cohort_size'].sum()
-                ret_data[rd] = {'before': rb, 'after': ra, 'nb': nb, 'na': na}
-
-        # --- SUMMARY ---
-        st.markdown("---")
-
-        if has_after_ftue or has_after_ret:
-            lifts = []
-            if has_after_ftue and vals_before and vals_after:
-                for i in range(len(vals_before)):
-                    vb, va = vals_before[i], vals_after[i]
-                    lift_pct = (va - vb) / vb * 100 if vb > 0 else 0
-                    lifts.append((ba_step_labels[i], va - vb, lift_pct))
-                improved = sorted([(s, d, p) for s, d, p in lifts if p > 0.5], key=lambda x: -x[2])
-                declined = sorted([(s, d, p) for s, d, p in lifts if p < -0.5], key=lambda x: x[2])
-                avg_lift = np.mean([p for _, _, p in lifts])
-                steps_improved = len(improved)
-                last_step_lift = lifts[-1][2] if lifts else 0
-
-                c1, c2, c3, c4 = st.columns(4)
-                c1.metric("Avg FTUE Lift", f"{avg_lift:+.1f}%")
-                c2.metric("Steps Improved", f"{steps_improved}/{len(lifts)}")
-                c3.metric("Steps Declined", f"{len(declined)}/{len(lifts)}")
-                c4.metric("Last Step Lift", f"{last_step_lift:+.1f}%")
-
-            if has_after_ret:
-                rc1, rc2, rc3, rc4 = st.columns(4)
-                for cw, rd in zip([rc1, rc2, rc3, rc4], [1, 3, 7, 14]):
-                    ri = ret_data.get(rd, {})
-                    if ri.get('nb', 0) > 0 and ri.get('na', 0) > 0:
-                        d = ri['after'] - ri['before']
-                        cw.metric(f"D{rd} Retention", f"{ri['after']:.1%}", f"{d:+.1%} vs before")
-                    elif ri.get('nb', 0) > 0:
-                        cw.metric(f"D{rd} Baseline", f"{ri['before']:.1%}", "Awaiting post-test")
-
-            # Text summary
-            lines = []
-            if has_after_ftue and lifts:
-                lines.append(f"<h4>v{ba_version} — Impact Summary</h4>")
-                lines.append(f"<b>FTUE:</b> {steps_improved}/{len(lifts)} steps improved (avg lift: {avg_lift:+.1f}%)")
-                if improved:
-                    lines.append("<br><b>Top gains:</b> " + " &middot; ".join([f"{s} {delta_tag(p)}" for s, _, p in improved[:3]]))
-                if declined:
-                    lines.append("<br><b>Biggest drops:</b> " + " &middot; ".join([f"{s} {delta_tag(p)}" for s, _, p in declined[:3]]))
-            if has_after_ret:
-                ret_items = []
-                for rd in [1, 3]:
-                    ri = ret_data.get(rd, {})
-                    if ri.get('nb', 0) > 0 and ri.get('na', 0) > 0:
-                        d = ri['after'] - ri['before']
-                        ret_items.append(f"D{rd}: {ri['before']:.1%} &rarr; {ri['after']:.1%} {delta_tag(d*100)}")
-                if ret_items:
-                    lines.append("<br><b>Retention:</b> " + " &middot; ".join(ret_items))
-            if lines:
-                st.markdown(f'<div class="summary-box">{"".join(lines)}</div>', unsafe_allow_html=True)
-
-        else:
-            # Pre-test baseline
-            if vals_before:
-                c1, c2 = st.columns(2)
-                c1.metric("Users (Baseline)", fmt_number(users_before))
-                c2.metric("Last Step Conversion", f"{vals_before[-1]:.1%}" if vals_before else "N/A")
-                if dropoff_before:
-                    # Top 3 drop-offs
-                    indexed_do = sorted(enumerate(dropoff_before), key=lambda x: -x[1])[:3]
-                    do_cols = st.columns(3)
-                    for rank, (do_col, (idx, do_val)) in enumerate(zip(do_cols, indexed_do)):
-                        do_col.metric(
-                            f"#{rank+1} Drop-off",
-                            f"{do_val:.1%}",
-                            f"{ba_step_labels[idx]} -> {ba_step_labels[idx+1]}",
-                        )
-            if has_ret:
-                rc1, rc2, rc3, rc4 = st.columns(4)
-                for cw, rd in zip([rc1, rc2, rc3, rc4], [1, 3, 7, 14]):
-                    ri = ret_data.get(rd, {})
-                    if ri.get('nb', 0) > 0:
-                        cw.metric(f"D{rd} Baseline", f"{ri['before']:.1%}")
-
-            st.markdown(f'<div class="summary-box"><h4>Pre-test baseline for v{ba_version}</h4>'
-                        f'Test begins <b>{TEST_START_DATE.strftime("%b %d, %Y")}</b>. '
-                        'This section will auto-populate with lift metrics, drop-off deltas, '
-                        'and a full impact summary once post-test data is available.</div>',
-                        unsafe_allow_html=True)
-
-        # --- FTUE FUNNEL CHART ---
-        if has_ftue and pct_cols_ba and vals_before:
-            st.markdown("---")
-            st.markdown("### FTUE Funnel: Before vs After")
-            st.markdown('<div class="legend-box">'
-                        '<strong style="color:#5B8DEF">Blue line</strong> = Before test &nbsp;&nbsp;'
-                        '<strong style="color:#2ECB71">Green line</strong> = After test &nbsp;&nbsp;'
-                        '<strong>Annotations</strong> = % lift at key steps (green = improved, red = declined)'
-                        '</div>', unsafe_allow_html=True)
-
-            ba_metric_options = ["Conversion vs Step 1"]
-            ratio_cols_ba = get_ratio_columns(fdf)
-            if ratio_cols_ba:
-                ba_metric_options.append("Conversion vs Previous Step")
-            ba_metric_set = st.selectbox("Metric set", ba_metric_options, key="ba_metric_set")
-
+        elif has_ftue and pct_cols_ba:
+            # --- Compute weighted averages for each version x period ---
             if ba_metric_set == "Conversion vs Previous Step" and ratio_cols_ba:
-                active_labels = [format_step_label(m) for m in ratio_cols_ba]
-                av_before, _ = calc_weighted_steps(vdf_before, ratio_cols_ba)
-                av_after = []
-                if has_after_ftue:
-                    av_after, _ = calc_weighted_steps(vdf_after, ratio_cols_ba)
+                active_metrics = ratio_cols_ba
             else:
-                active_labels = ba_step_labels
-                av_before = vals_before
-                av_after = vals_after
+                active_metrics = pct_cols_ba
+            active_labels = [format_step_label(m) for m in active_metrics]
 
+            st.markdown("---")
+
+            # --- FUNNEL CHART: all versions, before vs after on same chart ---
             fig_ba = go.Figure()
-            fig_ba.add_trace(go.Scatter(
-                x=active_labels, y=av_before,
-                mode='lines+markers',
-                name=f"Before ({fmt_number(users_before)} users)",
-                line=dict(color=COLORS['before'], width=2.5),
-                marker=dict(size=7, symbol='circle'),
-                hovertemplate='<b>%{x}</b><br>Before: %{y:.4f}<extra></extra>',
-            ))
-            if has_after_ftue and av_after:
-                fig_ba.add_trace(go.Scatter(
-                    x=active_labels, y=av_after,
-                    mode='lines+markers',
-                    name=f"After ({fmt_number(users_after)} users)",
-                    line=dict(color=COLORS['after'], width=2.5),
-                    marker=dict(size=7, symbol='diamond'),
-                    hovertemplate='<b>%{x}</b><br>After: %{y:.4f}<extra></extra>',
-                ))
-                for i in range(len(av_before)):
-                    if (i % 5 == 0 or i == len(av_before) - 1) and av_before[i] > 0:
-                        lift = (av_after[i] - av_before[i]) / av_before[i] * 100
-                        color = COLORS['after'] if lift > 0 else COLORS['negative']
-                        fig_ba.add_annotation(
-                            x=active_labels[i], y=max(av_before[i], av_after[i]),
-                            text=f"<b>{lift:+.1f}%</b>", showarrow=True,
-                            arrowhead=0, arrowcolor=color, arrowwidth=1,
-                            ay=-25, font=dict(size=11, color=color),
-                            bgcolor='rgba(255,255,255,0.85)', borderpad=3,
-                        )
+            summary_rows = []
 
+            for ver in sorted(ba_versions, key=version_sort_key):
+                ver_color = color_map.get(str(ver), '#333')
+                vdf_ver = fdf_all[fdf_all['install_version_str'] == str(ver)]
+
+                vdf_before = vdf_ver[(vdf_ver['install_date'] >= before_start) & (vdf_ver['install_date'] <= before_end)]
+                vdf_after = vdf_ver[(vdf_ver['install_date'] >= after_start) & (vdf_ver['install_date'] <= after_end)]
+
+                vals_b, users_b = calc_weighted_steps(vdf_before, active_metrics)
+                vals_a, users_a = calc_weighted_steps(vdf_after, active_metrics)
+
+                ver_label = f"v{ver}" if len(ba_versions) > 1 else ""
+                prefix_b = f"{ver_label} " if ver_label else ""
+                prefix_a = f"{ver_label} " if ver_label else ""
+
+                if vals_b and users_b > 0:
+                    fig_ba.add_trace(go.Scatter(
+                        x=active_labels, y=vals_b,
+                        mode='lines+markers',
+                        name=f"{prefix_b}Before ({users_b:,.0f} users)",
+                        line=dict(color=ver_color, width=2.5, dash='solid'),
+                        marker=dict(size=7, symbol='circle'),
+                        hovertemplate='<b>%{x}</b><br>' + f'{prefix_b}Before' + ': %{y:.4f}<extra></extra>',
+                    ))
+
+                if vals_a and users_a > 0:
+                    fig_ba.add_trace(go.Scatter(
+                        x=active_labels, y=vals_a,
+                        mode='lines+markers',
+                        name=f"{prefix_a}After ({users_a:,.0f} users)",
+                        line=dict(color=ver_color, width=2.5, dash='dash'),
+                        marker=dict(size=7, symbol='diamond'),
+                        hovertemplate='<b>%{x}</b><br>' + f'{prefix_a}After' + ': %{y:.4f}<extra></extra>',
+                    ))
+
+                # Lift annotations (for single version or first version)
+                if vals_b and vals_a and users_b > 0 and users_a > 0:
+                    for i in range(len(vals_b)):
+                        if (i % 5 == 0 or i == len(vals_b) - 1) and vals_b[i] > 0:
+                            lift = (vals_a[i] - vals_b[i]) / vals_b[i] * 100
+                            ann_color = COLORS['after'] if lift > 0 else COLORS['negative']
+                            if len(ba_versions) == 1:
+                                fig_ba.add_annotation(
+                                    x=active_labels[i], y=max(vals_b[i], vals_a[i]),
+                                    text=f"<b>{lift:+.1f}%</b>", showarrow=True,
+                                    arrowhead=0, arrowcolor=ann_color, arrowwidth=1,
+                                    ay=-25, font=dict(size=11, color=ann_color),
+                                    bgcolor='rgba(255,255,255,0.85)', borderpad=3,
+                                )
+
+                # Summary row
+                row = {'Version': ver, 'Before Users': fmt_number(users_b), 'After Users': fmt_number(users_a)}
+                if vals_b and vals_a and users_b > 0 and users_a > 0:
+                    row['Before Last Step'] = f"{vals_b[-1]:.1%}"
+                    row['After Last Step'] = f"{vals_a[-1]:.1%}"
+                    last_lift = (vals_a[-1] - vals_b[-1]) / vals_b[-1] * 100 if vals_b[-1] > 0 else 0
+                    row['Last Step Lift'] = f"{last_lift:+.1f}%"
+                    lifts_all = [(vals_a[i] - vals_b[i]) / vals_b[i] * 100 if vals_b[i] > 0 else 0 for i in range(len(vals_b))]
+                    row['Avg Lift'] = f"{np.mean(lifts_all):+.1f}%"
+                elif vals_b and users_b > 0:
+                    row['Before Last Step'] = f"{vals_b[-1]:.1%}"
+                    row['After Last Step'] = 'No data'
+                    row['Last Step Lift'] = '-'
+                    row['Avg Lift'] = '-'
+                summary_rows.append(row)
+
+            title_versions = ", ".join([f"v{v}" for v in ba_versions[:3]])
+            if len(ba_versions) > 3:
+                title_versions += f" +{len(ba_versions)-3} more"
             apply_chart_theme(fig_ba,
-                title=dict(text=f"v{ba_version} — FTUE Funnel", font=dict(size=18)),
+                title=dict(text=f"{title_versions} — FTUE Funnel: Before vs After", font=dict(size=18)),
                 xaxis_title="FTUE Steps", yaxis_title="Conversion Rate",
                 height=620, hovermode='x unified',
                 xaxis_tickangle=-45, xaxis=dict(tickfont=dict(size=9)),
@@ -850,170 +751,105 @@ def main():
             )
             st.plotly_chart(fig_ba, use_container_width=True)
 
-            if not has_after_ftue:
-                st.info("Showing pre-test baseline. Green 'After' line appears once post-test data flows in.")
+            # --- Summary metrics ---
+            if summary_rows:
+                st.dataframe(pd.DataFrame(summary_rows), use_container_width=True, hide_index=True)
 
-        # --- DROP-OFF COMPARISON ---
-        if has_ftue and len(dropoff_before) > 0:
-            st.markdown("---")
-            st.markdown("### Step-to-Step Drop-off")
-            st.markdown('<div class="legend-box">'
-                        'Each bar shows the <b>% of users lost</b> between consecutive steps. '
-                        '<b>Lower bars = better</b> (fewer users drop off). '
-                        '<strong style="color:#5B8DEF">Blue</strong> = Before &nbsp;'
-                        '<strong style="color:#2ECB71">Green</strong> = After'
-                        '</div>', unsafe_allow_html=True)
+            # --- DROP-OFF COMPARISON (for first selected version) ---
+            ba_version = ba_versions[0]
+            vdf_ver = fdf_all[fdf_all['install_version_str'] == str(ba_version)]
+            vdf_before = vdf_ver[(vdf_ver['install_date'] >= before_start) & (vdf_ver['install_date'] <= before_end)]
+            vdf_after = vdf_ver[(vdf_ver['install_date'] >= after_start) & (vdf_ver['install_date'] <= after_end)]
+            pct_cols_do = get_pct_columns(fdf_all)
+            do_labels = [format_step_label(m) for m in pct_cols_do]
+            vals_b_do, _ = calc_weighted_steps(vdf_before, pct_cols_do)
+            vals_a_do, users_a_do = calc_weighted_steps(vdf_after, pct_cols_do)
 
-            transition_labels = [f"{ba_step_labels[i]} -> {ba_step_labels[i+1]}" for i in range(len(dropoff_before))]
-            short_labels = [f"{i+1}->{i+2}" for i in range(len(dropoff_before))]
+            dropoff_before = [(vals_b_do[i] - vals_b_do[i+1]) / vals_b_do[i] if vals_b_do[i] > 0 else 0 for i in range(len(vals_b_do) - 1)]
+            dropoff_after = [(vals_a_do[i] - vals_a_do[i+1]) / vals_a_do[i] if vals_a_do[i] > 0 else 0 for i in range(len(vals_a_do) - 1)] if users_a_do > 0 else []
 
-            fig_do = go.Figure()
-            fig_do.add_trace(go.Bar(
-                x=short_labels, y=dropoff_before, name="Before",
-                marker_color=COLORS['before'], opacity=0.85,
-                customdata=transition_labels,
-                hovertemplate='<b>%{customdata}</b><br>Drop-off: %{y:.2%}<extra>Before</extra>',
-            ))
-            if has_after_ftue and dropoff_after:
-                fig_do.add_trace(go.Bar(
-                    x=short_labels, y=dropoff_after, name="After",
-                    marker_color=COLORS['after'], opacity=0.85,
-                    customdata=transition_labels,
-                    hovertemplate='<b>%{customdata}</b><br>Drop-off: %{y:.2%}<extra>After</extra>',
-                ))
+            if dropoff_before:
+                st.markdown("---")
+                st.markdown(f"### Step-to-Step Drop-off (v{ba_version})")
+                transition_labels = [f"{do_labels[i]} -> {do_labels[i+1]}" for i in range(len(dropoff_before))]
+                short_labels = [f"{i+1}->{i+2}" for i in range(len(dropoff_before))]
 
-            apply_chart_theme(fig_do,
-                title=dict(text=f"v{ba_version} — Drop-off per Transition"),
-                xaxis_title="Step Transition (hover for full name)",
-                yaxis_title="Drop-off Rate", yaxis_tickformat='.1%',
-                height=420, barmode='group',
-            )
-            st.plotly_chart(fig_do, use_container_width=True)
+                fig_do = go.Figure()
+                fig_do.add_trace(go.Bar(x=short_labels, y=dropoff_before, name="Before",
+                    marker_color=COLORS['before'], opacity=0.85, customdata=transition_labels,
+                    hovertemplate='<b>%{customdata}</b><br>Drop-off: %{y:.2%}<extra>Before</extra>'))
+                if dropoff_after:
+                    fig_do.add_trace(go.Bar(x=short_labels, y=dropoff_after, name="After",
+                        marker_color=COLORS['after'], opacity=0.85, customdata=transition_labels,
+                        hovertemplate='<b>%{customdata}</b><br>Drop-off: %{y:.2%}<extra>After</extra>'))
+                apply_chart_theme(fig_do, title=dict(text=f"v{ba_version} — Drop-off per Transition"),
+                    xaxis_title="Step Transition", yaxis_title="Drop-off Rate",
+                    yaxis_tickformat='.1%', height=420, barmode='group')
+                st.plotly_chart(fig_do, use_container_width=True)
 
-            # Drop-off change waterfall
-            if has_after_ftue and dropoff_after and len(dropoff_after) == len(dropoff_before):
-                st.markdown("#### Drop-off Change (After minus Before)")
-                st.markdown('<div class="legend-box">'
-                            '<strong style="color:#2ECB71">Green bars below zero</strong> = drop-off decreased = improvement<br>'
-                            '<strong style="color:#E74C3C">Red bars above zero</strong> = drop-off increased = regression'
-                            '</div>', unsafe_allow_html=True)
+                # Drop-off delta
+                if dropoff_after and len(dropoff_after) == len(dropoff_before):
+                    do_changes = [dropoff_after[i] - dropoff_before[i] for i in range(len(dropoff_before))]
+                    do_colors = [COLORS['after'] if c < -0.001 else COLORS['negative'] if c > 0.001 else COLORS['neutral'] for c in do_changes]
+                    fig_doc = go.Figure()
+                    fig_doc.add_trace(go.Bar(x=short_labels, y=do_changes, marker_color=do_colors,
+                        customdata=transition_labels, hovertemplate='<b>%{customdata}</b><br>Change: %{y:+.2%}<extra></extra>'))
+                    fig_doc.add_hline(y=0, line_color="#2C3E50", line_width=1.5)
+                    apply_chart_theme(fig_doc, title=dict(text=f"v{ba_version} — Drop-off Delta"),
+                        xaxis_title="Step Transition", yaxis_title="Change in Drop-off",
+                        yaxis_tickformat='+.1%', height=380)
+                    st.plotly_chart(fig_doc, use_container_width=True)
 
-                do_changes = [dropoff_after[i] - dropoff_before[i] for i in range(len(dropoff_before))]
-                do_colors = [COLORS['after'] if c < -0.001 else COLORS['negative'] if c > 0.001 else COLORS['neutral'] for c in do_changes]
-
-                fig_doc = go.Figure()
-                fig_doc.add_trace(go.Bar(
-                    x=short_labels, y=do_changes,
-                    marker_color=do_colors,
-                    customdata=transition_labels,
-                    hovertemplate='<b>%{customdata}</b><br>Change: %{y:+.2%}<extra></extra>',
-                ))
-                fig_doc.add_hline(y=0, line_color="#2C3E50", line_width=1.5)
-                apply_chart_theme(fig_doc,
-                    title=dict(text=f"v{ba_version} — Drop-off Delta"),
-                    xaxis_title="Step Transition", yaxis_title="Change in Drop-off",
-                    yaxis_tickformat='+.1%', height=380,
-                )
-                st.plotly_chart(fig_doc, use_container_width=True)
-
-            # Detailed table
+            # --- Detailed table ---
             st.markdown("#### Detailed Step Table")
             detail_rows = []
-            for i in range(len(ba_step_labels)):
-                row = {'Step': ba_step_labels[i], 'Before': f"{vals_before[i]:.4f}"}
-                if has_after_ftue and i < len(vals_after):
-                    row['After'] = f"{vals_after[i]:.4f}"
-                    lift = vals_after[i] - vals_before[i]
-                    lift_pct = (lift / vals_before[i] * 100) if vals_before[i] > 0 else 0
-                    row['Lift'] = f"{lift:+.4f}"
-                    row['Lift %'] = f"{lift_pct:+.1f}%"
-                if i < len(dropoff_before):
-                    row['Drop-off Before'] = f"{dropoff_before[i]:.2%}"
-                    if has_after_ftue and i < len(dropoff_after):
-                        row['Drop-off After'] = f"{dropoff_after[i]:.2%}"
-                        row['DO Change'] = f"{dropoff_after[i] - dropoff_before[i]:+.2%}"
+            for i in range(len(active_labels)):
+                row = {'Step': active_labels[i]}
+                for ver in ba_versions:
+                    vdf_ver = fdf_all[fdf_all['install_version_str'] == str(ver)]
+                    vb_d = vdf_ver[(vdf_ver['install_date'] >= before_start) & (vdf_ver['install_date'] <= before_end)]
+                    va_d = vdf_ver[(vdf_ver['install_date'] >= after_start) & (vdf_ver['install_date'] <= after_end)]
+                    vb_vals, ub = calc_weighted_steps(vb_d, active_metrics)
+                    va_vals, ua = calc_weighted_steps(va_d, active_metrics)
+                    vb_val = vb_vals[i] if vb_vals and ub > 0 else 0
+                    va_val = va_vals[i] if va_vals and ua > 0 else 0
+                    ver_prefix = f"v{ver} " if len(ba_versions) > 1 else ""
+                    row[f'{ver_prefix}Before'] = f"{vb_val:.4f}" if ub > 0 else '-'
+                    row[f'{ver_prefix}After'] = f"{va_val:.4f}" if ua > 0 else '-'
+                    if ub > 0 and ua > 0 and vb_val > 0:
+                        lift = (va_val - vb_val) / vb_val * 100
+                        row[f'{ver_prefix}Lift'] = f"{lift:+.1f}%"
+                    else:
+                        row[f'{ver_prefix}Lift'] = '-'
                 detail_rows.append(row)
             st.dataframe(pd.DataFrame(detail_rows), use_container_width=True, hide_index=True, height=500)
 
         # --- RETENTION ---
-        if has_ret:
+        if has_ret and ba_versions:
             st.markdown("---")
             st.markdown("### Retention: Before vs After")
-            st.markdown('<div class="legend-box">'
-                        'Retention = % of install cohort returning on day N. '
-                        'Calculation <b>excludes days with 0 active users</b> to avoid skew. '
-                        '<strong style="color:#5B8DEF">Blue</strong> = Before test &nbsp;'
-                        '<strong style="color:#2ECB71">Green</strong> = After test &nbsp;'
-                        '<strong style="color:#E74C3C">Red dashed line</strong> = Test start date &nbsp;'
-                        '<b>Dotted lines</b> = period averages'
-                        '</div>', unsafe_allow_html=True)
 
+            ba_version = ba_versions[0]
             ret_comp = []
-            for rd in [1, 3, 7, 14]:
-                ri = ret_data.get(rd, {})
-                row = {'Metric': f'D{rd} Retention', 'Before': fmt_pct(ri['before']) if ri.get('nb', 0) > 0 else 'N/A', 'Cohort Before': fmt_number(ri.get('nb', 0))}
-                if has_after_ret and ri.get('na', 0) > 0:
-                    d = ri['after'] - ri['before']
-                    row.update({'After': fmt_pct(ri['after']), 'Cohort After': fmt_number(ri['na']),
-                                'Delta (pp)': f"{d:+.2%}", 'Relative Lift': f"{(d / ri['before'] * 100) if ri['before'] > 0 else 0:+.1f}%"})
-                else:
-                    row.update({'After': '-', 'Cohort After': '-', 'Delta (pp)': '-', 'Relative Lift': '-'})
-                ret_comp.append(row)
+            for ver in ba_versions:
+                vdf_ret = rdf_all[rdf_all['install_version'] == str(ver)]
+                vdf_ret_before = vdf_ret[(vdf_ret['install_date'] >= before_start) & (vdf_ret['install_date'] <= before_end)]
+                vdf_ret_after = vdf_ret[(vdf_ret['install_date'] >= after_start) & (vdf_ret['install_date'] <= after_end)]
+                for rd in [1, 3, 7, 14]:
+                    rb = weighted_retention(vdf_ret_before[vdf_ret_before['days_since_install'] == rd])
+                    nb = vdf_ret_before[(vdf_ret_before['days_since_install'] == rd) & (vdf_ret_before['users_active'] > 0)]['cohort_size'].sum()
+                    ra = weighted_retention(vdf_ret_after[vdf_ret_after['days_since_install'] == rd])
+                    na = vdf_ret_after[(vdf_ret_after['days_since_install'] == rd) & (vdf_ret_after['users_active'] > 0)]['cohort_size'].sum()
+                    row = {'Version': ver, 'Metric': f'D{rd}', 'Before': fmt_pct(rb) if nb > 0 else 'N/A',
+                           'Cohort Before': fmt_number(nb)}
+                    if na > 0:
+                        d = ra - rb
+                        row.update({'After': fmt_pct(ra), 'Cohort After': fmt_number(na),
+                                    'Delta (pp)': f"{d:+.2%}", 'Lift': f"{(d / rb * 100) if rb > 0 else 0:+.1f}%"})
+                    else:
+                        row.update({'After': '-', 'Cohort After': '-', 'Delta (pp)': '-', 'Lift': '-'})
+                    ret_comp.append(row)
             st.dataframe(pd.DataFrame(ret_comp), use_container_width=True, hide_index=True)
-
-            st.markdown(f"#### v{ba_version} — D1 & D3 Daily Retention")
-
-            for ret_d in [1, 3]:
-                daily_ret = []
-                for dt, gdf in vdf_ret.groupby('install_date'):
-                    ddf = gdf[(gdf['days_since_install'] == ret_d) & (gdf['users_active'] > 0)]
-                    cs, ua = ddf['cohort_size'].sum(), ddf['users_active'].sum()
-                    ret = ua / cs if cs > 0 else None
-                    cohort_d0 = gdf[gdf['days_since_install'] == 0]['cohort_size'].sum()
-                    daily_ret.append({'date': dt, 'retention': ret, 'cohort': cohort_d0, 'period': 'After' if dt >= TEST_START_DATE else 'Before'})
-
-                dr_df = pd.DataFrame(daily_ret).dropna(subset=['retention'])
-                if dr_df.empty:
-                    continue
-                dr_df['date'] = pd.to_datetime(dr_df['date'])
-                dr_before = dr_df[dr_df['period'] == 'Before']
-                dr_after = dr_df[dr_df['period'] == 'After']
-
-                fig_dr = go.Figure()
-                if not dr_before.empty:
-                    fig_dr.add_trace(go.Scatter(
-                        x=dr_before['date'], y=dr_before['retention'], mode='lines+markers',
-                        name='Before', line=dict(color=COLORS['before'], width=2.5), marker=dict(size=6),
-                        customdata=dr_before[['cohort']].values,
-                        hovertemplate='%{x|%b %d}<br>D' + str(ret_d) + ': %{y:.2%}<br>Cohort: %{customdata[0]:,}<extra>Before</extra>',
-                    ))
-                if not dr_after.empty:
-                    fig_dr.add_trace(go.Scatter(
-                        x=dr_after['date'], y=dr_after['retention'], mode='lines+markers',
-                        name='After', line=dict(color=COLORS['after'], width=2.5), marker=dict(size=6, symbol='diamond'),
-                        customdata=dr_after[['cohort']].values,
-                        hovertemplate='%{x|%b %d}<br>D' + str(ret_d) + ': %{y:.2%}<br>Cohort: %{customdata[0]:,}<extra>After</extra>',
-                    ))
-                if not dr_before.empty:
-                    avg_b = dr_before['retention'].mean()
-                    fig_dr.add_hline(y=avg_b, line_dash="dot", line_color=COLORS['before'], line_width=1.5,
-                                     annotation_text=f"Avg Before: {avg_b:.1%}", annotation_position="top left",
-                                     annotation_font=dict(size=11, color=COLORS['before']))
-                if not dr_after.empty:
-                    avg_a = dr_after['retention'].mean()
-                    fig_dr.add_hline(y=avg_a, line_dash="dot", line_color=COLORS['after'], line_width=1.5,
-                                     annotation_text=f"Avg After: {avg_a:.1%}", annotation_position="top right",
-                                     annotation_font=dict(size=11, color=COLORS['after']))
-                add_test_start_line(fig_dr)
-                apply_chart_theme(fig_dr,
-                    title=dict(text=f"v{ba_version} — D{ret_d} Retention"), xaxis_title="Install Date",
-                    yaxis_title=f"D{ret_d} Retention", yaxis_tickformat='.1%', height=420,
-                    hovermode='x unified',
-                )
-                st.plotly_chart(fig_dr, use_container_width=True)
-
-            if not has_after_ret:
-                st.info("No post-test retention data yet. D1 appears ~1 day after test start, D3 after ~3 days.")
 
     # =========================================================================
     # TAB 1: CHART: VERSION
