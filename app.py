@@ -16,6 +16,8 @@ FTUE_TABLE = f"{BQ_PROJECT}.peerplay.ftue_dashboard_fixed"
 RETENTION_TABLE = f"{BQ_PROJECT}.peerplay.hint_system_ab_test_results"
 
 TEST_START_DATE = date(2026, 3, 17)
+TEST_START_HOUR = 17  # 5:00 PM UTC
+DEFAULT_VERSION = '0.3811'
 
 DAYS_SINCE_INSTALL_BUCKET_ORDER = ['0-3', '3-7', '7-14', '14-21', '21-30', '30-60']
 
@@ -710,22 +712,29 @@ def main():
             vdf = ba_filter_date_hour(vdf, ds, de, sh, eh)
             return int(vdf['total_users'].sum()) if 'total_users' in vdf.columns else len(vdf)
 
+        # Default version for Before/After
+        default_ba_ver = [v for v in ba_versions_available if v.startswith(DEFAULT_VERSION)]
+        if not default_ba_ver:
+            default_ba_ver = [ba_versions_available[0]] if ba_versions_available else []
+
+        # Default platform: both iOS and Android
+        ba_default_plats = ba_selected_platforms  # from inline filters above
+
         col_before, col_vs, col_after = st.columns([5, 0.5, 5])
         with col_before:
             st.markdown(f'<div style="background:#EBF5FB;padding:10px 16px;border-radius:8px;border-left:4px solid {COLORS["before"]};margin-bottom:12px;">'
                         f'<b style="color:{COLORS["before"]};font-size:1.1em;">BEFORE</b></div>', unsafe_allow_html=True)
             before_versions = st.multiselect("Versions", ba_versions_available,
-                default=[ba_versions_available[0]] if ba_versions_available else [], key="ba_before_vers")
+                default=default_ba_ver, key="ba_before_vers")
             bc1, bch1, bc2, bch2 = st.columns([2, 1, 2, 1])
             with bc1:
                 before_start = st.date_input("Start", value=ba_min_date, min_value=ba_min_date, max_value=ba_max_date, key="ba_before_start")
             with bch1:
                 before_start_hour = st.number_input("Hour", min_value=0, max_value=23, value=0, key="ba_before_start_h")
             with bc2:
-                before_end_default = min(TEST_START_DATE - pd.Timedelta(days=1), ba_max_date) if TEST_START_DATE > ba_min_date else ba_max_date
-                before_end = st.date_input("End", value=before_end_default, min_value=ba_min_date, max_value=ba_max_date, key="ba_before_end")
+                before_end = st.date_input("End", value=TEST_START_DATE if TEST_START_DATE <= ba_max_date else ba_max_date, min_value=ba_min_date, max_value=ba_max_date, key="ba_before_end")
             with bch2:
-                before_end_hour = st.number_input("Hour", min_value=0, max_value=23, value=23, key="ba_before_end_h")
+                before_end_hour = st.number_input("Hour", min_value=0, max_value=23, value=TEST_START_HOUR - 1 if TEST_START_HOUR > 0 else 23, key="ba_before_end_h")
             if before_versions:
                 st.markdown(" | ".join([f"v{v}: **{ba_installs(v, before_start, before_end, before_start_hour, before_end_hour):,}**" for v in before_versions]))
         with col_vs:
@@ -734,12 +743,12 @@ def main():
             st.markdown(f'<div style="background:#EAFAF1;padding:10px 16px;border-radius:8px;border-left:4px solid {COLORS["after"]};margin-bottom:12px;">'
                         f'<b style="color:{COLORS["after"]};font-size:1.1em;">AFTER</b></div>', unsafe_allow_html=True)
             after_versions = st.multiselect("Versions", ba_versions_available,
-                default=[ba_versions_available[0]] if ba_versions_available else [], key="ba_after_vers")
+                default=default_ba_ver, key="ba_after_vers")
             ac1, ach1, ac2, ach2 = st.columns([2, 1, 2, 1])
             with ac1:
                 after_start = st.date_input("Start", value=TEST_START_DATE if TEST_START_DATE <= ba_max_date else ba_min_date, min_value=ba_min_date, max_value=ba_max_date, key="ba_after_start")
             with ach1:
-                after_start_hour = st.number_input("Hour", min_value=0, max_value=23, value=0, key="ba_after_start_h")
+                after_start_hour = st.number_input("Hour", min_value=0, max_value=23, value=TEST_START_HOUR, key="ba_after_start_h")
             with ac2:
                 after_end = st.date_input("End", value=ba_max_date, min_value=ba_min_date, max_value=ba_max_date, key="ba_after_end")
             with ach2:
