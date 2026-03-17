@@ -155,45 +155,45 @@ funnel_flags AS (
     -- Step 02: impression_scapes ch1 (within 30min of privacy)
     MAX(CASE WHEN ue.mp_event_name = 'impression_scapes' AND ue.chapter = 1
           AND a.ts_privacy IS NOT NULL
-          AND (ue.res_timestamp - a.ts_privacy) / 60 <= 30
+          AND (ue.res_timestamp - a.ts_privacy) / 60000 <= 30
           AND (a.ts_flow1_step2 IS NULL OR ue.res_timestamp < a.ts_flow1_step2)
           THEN 1 ELSE 0 END) AS step_02,
 
     -- Step 03: board_tasks_new_task (after privacy, within 30min of privacy)
     MAX(CASE WHEN ue.mp_event_name = 'board_tasks_new_task'
           AND a.ts_privacy IS NOT NULL AND ue.res_timestamp >= a.ts_privacy
-          AND (ue.res_timestamp - a.ts_privacy) / 60 <= 30
+          AND (ue.res_timestamp - a.ts_privacy) / 60000 <= 30
           AND (a.ts_flow1_step2 IS NULL OR ue.res_timestamp < a.ts_flow1_step2)
           THEN 1 ELSE 0 END) AS step_03,
 
     -- Step 04: impression_dialog 1001199 (within 30min of privacy)
     MAX(CASE WHEN ue.mp_event_name = 'impression_dialog' AND ue.dialog_id = '1001199'
           AND a.ts_privacy IS NOT NULL
-          AND (ue.res_timestamp - a.ts_privacy) / 60 <= 30
+          AND (ue.res_timestamp - a.ts_privacy) / 60000 <= 30
           THEN 1 ELSE 0 END) AS step_04,
 
     -- Step 05: click_dialog_exit 1001199 (within 30min of privacy)
     MAX(CASE WHEN ue.mp_event_name = 'click_dialog_exit' AND ue.dialog_id = '1001199'
           AND a.ts_privacy IS NOT NULL
-          AND (ue.res_timestamp - a.ts_privacy) / 60 <= 30
+          AND (ue.res_timestamp - a.ts_privacy) / 60000 <= 30
           THEN 1 ELSE 0 END) AS step_05,
 
     -- Step 06: ftue_flow1_step0 (within 30min of privacy)
     MAX(CASE WHEN ue.mp_event_name = 'impression_ftue_flow1_step0'
           AND a.ts_privacy IS NOT NULL
-          AND (ue.res_timestamp - a.ts_privacy) / 60 <= 30
+          AND (ue.res_timestamp - a.ts_privacy) / 60000 <= 30
           THEN 1 ELSE 0 END) AS step_06,
 
     -- Step 07: ftue_flow1_step1 (within 30min of flow1_step0)
     MAX(CASE WHEN ue.mp_event_name = 'impression_ftue_flow1_step1'
           AND a.ts_flow1_step0 IS NOT NULL
-          AND (ue.res_timestamp - a.ts_flow1_step0) / 60 <= 30
+          AND (ue.res_timestamp - a.ts_flow1_step0) / 60000 <= 30
           THEN 1 ELSE 0 END) AS step_07,
 
     -- Step 08: click_board_button_scapes (between flow1_step1 and flow1_step2, within 30min of flow1_step1)
     MAX(CASE WHEN ue.mp_event_name = 'click_board_button_scapes'
           AND a.ts_flow1_step1 IS NOT NULL AND ue.res_timestamp >= a.ts_flow1_step1
-          AND (ue.res_timestamp - a.ts_flow1_step1) / 60 <= 30
+          AND (ue.res_timestamp - a.ts_flow1_step1) / 60000 <= 30
           AND (a.ts_flow1_step2 IS NULL OR ue.res_timestamp <= a.ts_flow1_step2)
           THEN 1 ELSE 0 END) AS step_08,
 
@@ -201,74 +201,74 @@ funnel_flags AS (
     MAX(CASE WHEN ue.mp_event_name = 'impression_board'
           AND a.ts_flow1_step1 IS NOT NULL AND ue.res_timestamp >= a.ts_flow1_step1
           AND a.ts_click_board_scapes IS NOT NULL AND ue.res_timestamp >= a.ts_click_board_scapes
-          AND (ue.res_timestamp - a.ts_flow1_step1) / 60 <= 30
+          AND (ue.res_timestamp - a.ts_flow1_step1) / 60000 <= 30
           AND (a.ts_flow1_step2 IS NULL OR ue.res_timestamp <= a.ts_flow1_step2)
           THEN 1 ELSE 0 END) AS step_09,
 
     -- Step 10: ftue_flow1_step2 (within 30min of flow1_step1)
     MAX(CASE WHEN ue.mp_event_name = 'impression_ftue_flow1_step2'
           AND a.ts_flow1_step1 IS NOT NULL
-          AND (ue.res_timestamp - a.ts_flow1_step1) / 60 <= 30
+          AND (ue.res_timestamp - a.ts_flow1_step1) / 60000 <= 30
           THEN 1 ELSE 0 END) AS step_10,
 
     -- Step 11: generation BEFORE first merge (between flow1_step2 and flow1_step3, within 30min of flow1_step2)
     MAX(CASE WHEN ue.mp_event_name = 'generation'
           AND (ue.first_merge_timestamp IS NULL OR ue.res_timestamp < ue.first_merge_timestamp)
           AND a.ts_flow1_step2 IS NOT NULL AND ue.res_timestamp >= a.ts_flow1_step2
-          AND (ue.res_timestamp - a.ts_flow1_step2) / 60 <= 30
+          AND (ue.res_timestamp - a.ts_flow1_step2) / 60000 <= 30
           AND (a.ts_flow1_step3 IS NULL OR ue.res_timestamp <= a.ts_flow1_step3)
           THEN 1 ELSE 0 END) AS step_11,
 
     -- Step 12: ftue_flow1_step3 (within 30min of flow1_step2)
     MAX(CASE WHEN ue.mp_event_name = 'impression_ftue_flow1_step3'
           AND a.ts_flow1_step2 IS NOT NULL
-          AND (ue.res_timestamp - a.ts_flow1_step2) / 60 <= 30
+          AND (ue.res_timestamp - a.ts_flow1_step2) / 60000 <= 30
           THEN 1 ELSE 0 END) AS step_12,
 
     -- Step 13: merge (between flow1_step3 and flow1_step4, within 30min of flow1_step3)
     MAX(CASE WHEN ue.mp_event_name = 'merge'
           AND a.ts_flow1_step3 IS NOT NULL AND ue.res_timestamp >= a.ts_flow1_step3
-          AND (ue.res_timestamp - a.ts_flow1_step3) / 60 <= 30
+          AND (ue.res_timestamp - a.ts_flow1_step3) / 60000 <= 30
           AND (a.ts_flow1_step4 IS NULL OR ue.res_timestamp <= a.ts_flow1_step4)
           THEN 1 ELSE 0 END) AS step_13,
 
     -- Step 14: ftue_flow1_step4 (within 30min of flow1_step3)
     MAX(CASE WHEN ue.mp_event_name = 'impression_ftue_flow1_step4'
           AND a.ts_flow1_step3 IS NOT NULL
-          AND (ue.res_timestamp - a.ts_flow1_step3) / 60 <= 30
+          AND (ue.res_timestamp - a.ts_flow1_step3) / 60000 <= 30
           THEN 1 ELSE 0 END) AS step_14,
 
     -- Step 15: board_tasks_task_ready (between flow1_step4 and flow1_step5, within 30min of flow1_step4)
     MAX(CASE WHEN ue.mp_event_name = 'board_tasks_task_ready'
           AND a.ts_flow1_step4 IS NOT NULL AND ue.res_timestamp >= a.ts_flow1_step4
-          AND (ue.res_timestamp - a.ts_flow1_step4) / 60 <= 30
+          AND (ue.res_timestamp - a.ts_flow1_step4) / 60000 <= 30
           AND (a.ts_flow1_step5 IS NULL OR ue.res_timestamp <= a.ts_flow1_step5)
           THEN 1 ELSE 0 END) AS step_15,
 
     -- Step 16: ftue_flow1_step5 (within 30min of flow1_step4)
     MAX(CASE WHEN ue.mp_event_name = 'impression_ftue_flow1_step5'
           AND a.ts_flow1_step4 IS NOT NULL
-          AND (ue.res_timestamp - a.ts_flow1_step4) / 60 <= 30
+          AND (ue.res_timestamp - a.ts_flow1_step4) / 60000 <= 30
           THEN 1 ELSE 0 END) AS step_16,
 
     -- Step 17: click_board_tasks_go (between flow1_step5 and flow1_step6, within 30min of flow1_step5)
     MAX(CASE WHEN ue.mp_event_name = 'click_board_tasks_go'
           AND a.ts_flow1_step5 IS NOT NULL AND ue.res_timestamp >= a.ts_flow1_step5
-          AND (ue.res_timestamp - a.ts_flow1_step5) / 60 <= 30
+          AND (ue.res_timestamp - a.ts_flow1_step5) / 60000 <= 30
           AND (a.ts_flow1_step6 IS NULL OR ue.res_timestamp <= a.ts_flow1_step6)
           THEN 1 ELSE 0 END) AS step_17,
 
     -- Step 18: rewards_board_task (between flow1_step5 and flow1_step6, within 30min of flow1_step5)
     MAX(CASE WHEN ue.mp_event_name = 'rewards_board_task'
           AND a.ts_flow1_step5 IS NOT NULL AND ue.res_timestamp >= a.ts_flow1_step5
-          AND (ue.res_timestamp - a.ts_flow1_step5) / 60 <= 30
+          AND (ue.res_timestamp - a.ts_flow1_step5) / 60000 <= 30
           AND (a.ts_flow1_step6 IS NULL OR ue.res_timestamp <= a.ts_flow1_step6)
           THEN 1 ELSE 0 END) AS step_18,
 
     -- Step 19: ftue_flow1_step6 (within 30min of flow1_step5)
     MAX(CASE WHEN ue.mp_event_name = 'impression_ftue_flow1_step6'
           AND a.ts_flow1_step5 IS NOT NULL
-          AND (ue.res_timestamp - a.ts_flow1_step5) / 60 <= 30
+          AND (ue.res_timestamp - a.ts_flow1_step5) / 60000 <= 30
           THEN 1 ELSE 0 END) AS step_19,
 
     -- Step 20: generation AFTER first merge (between flow1_step6 and flow1_step7, within 30min of flow1_step6)
@@ -276,41 +276,41 @@ funnel_flags AS (
           AND ue.first_merge_timestamp IS NOT NULL
           AND ue.res_timestamp >= ue.first_merge_timestamp
           AND a.ts_flow1_step6 IS NOT NULL AND ue.res_timestamp >= a.ts_flow1_step6
-          AND (ue.res_timestamp - a.ts_flow1_step6) / 60 <= 30
+          AND (ue.res_timestamp - a.ts_flow1_step6) / 60000 <= 30
           AND (a.ts_flow1_step7 IS NULL OR ue.res_timestamp <= a.ts_flow1_step7)
           THEN 1 ELSE 0 END) AS step_20,
 
     -- Step 21: ftue_flow1_step7 (within 30min of flow1_step6)
     MAX(CASE WHEN ue.mp_event_name = 'impression_ftue_flow1_step7'
           AND a.ts_flow1_step6 IS NOT NULL
-          AND (ue.res_timestamp - a.ts_flow1_step6) / 60 <= 30
+          AND (ue.res_timestamp - a.ts_flow1_step6) / 60000 <= 30
           THEN 1 ELSE 0 END) AS step_21,
 
     -- Step 22: impression_how_to_play (between flow1_step7 and flow2_step0, within 30min of flow1_step7)
     MAX(CASE WHEN ue.mp_event_name = 'impression_how_to_play'
           AND a.ts_flow1_step7 IS NOT NULL AND ue.res_timestamp >= a.ts_flow1_step7
-          AND (ue.res_timestamp - a.ts_flow1_step7) / 60 <= 30
+          AND (ue.res_timestamp - a.ts_flow1_step7) / 60000 <= 30
           AND (a.ts_flow2_step0 IS NULL OR ue.res_timestamp <= a.ts_flow2_step0)
           THEN 1 ELSE 0 END) AS step_22,
 
     -- Step 23: click_scapes_button_board (after how_to_play, before flow2_step0, within 30min of how_to_play)
     MAX(CASE WHEN ue.mp_event_name = 'click_scapes_button_board'
           AND a.ts_how_to_play IS NOT NULL AND ue.res_timestamp >= a.ts_how_to_play
-          AND (ue.res_timestamp - a.ts_how_to_play) / 60 <= 30
+          AND (ue.res_timestamp - a.ts_how_to_play) / 60000 <= 30
           AND (a.ts_flow2_step0 IS NULL OR ue.res_timestamp <= a.ts_flow2_step0)
           THEN 1 ELSE 0 END) AS step_23,
 
     -- Step 24: ftue_flow2_step0 (after how_to_play, within 30min of how_to_play)
     MAX(CASE WHEN ue.mp_event_name = 'impression_ftue_flow2_step0'
           AND a.ts_how_to_play IS NOT NULL AND ue.res_timestamp >= a.ts_how_to_play
-          AND (ue.res_timestamp - a.ts_how_to_play) / 60 <= 30
+          AND (ue.res_timestamp - a.ts_how_to_play) / 60000 <= 30
           THEN 1 ELSE 0 END) AS step_24,
 
     -- Step 25: impression_dialog 10013 (between flow2_step0 and flow2_step1, within 30min of flow2_step0)
     MAX(CASE WHEN ue.mp_event_name = 'impression_dialog' AND ue.dialog_id = '10013'
           AND a.ts_how_to_play IS NOT NULL
           AND a.ts_flow2_step0 IS NOT NULL AND ue.res_timestamp >= a.ts_flow2_step0
-          AND (ue.res_timestamp - a.ts_flow2_step0) / 60 <= 30
+          AND (ue.res_timestamp - a.ts_flow2_step0) / 60000 <= 30
           AND (a.ts_flow2_step1 IS NULL OR ue.res_timestamp <= a.ts_flow2_step1)
           THEN 1 ELSE 0 END) AS step_25,
 
@@ -318,7 +318,7 @@ funnel_flags AS (
     MAX(CASE WHEN ue.mp_event_name = 'click_scapes_tasks_go_button'
           AND a.ts_how_to_play IS NOT NULL
           AND a.ts_flow2_step0 IS NOT NULL AND ue.res_timestamp >= a.ts_flow2_step0
-          AND (ue.res_timestamp - a.ts_flow2_step0) / 60 <= 30
+          AND (ue.res_timestamp - a.ts_flow2_step0) / 60000 <= 30
           AND (a.ts_flow2_step1 IS NULL OR ue.res_timestamp <= a.ts_flow2_step1)
           THEN 1 ELSE 0 END) AS step_26,
 
@@ -326,7 +326,7 @@ funnel_flags AS (
     MAX(CASE WHEN ue.mp_event_name = 'scapes_tasks_cash_deducted'
           AND a.ts_how_to_play IS NOT NULL
           AND a.ts_flow2_step0 IS NOT NULL AND ue.res_timestamp >= a.ts_flow2_step0
-          AND (ue.res_timestamp - a.ts_flow2_step0) / 60 <= 30
+          AND (ue.res_timestamp - a.ts_flow2_step0) / 60000 <= 30
           AND (a.ts_flow2_step1 IS NULL OR ue.res_timestamp <= a.ts_flow2_step1)
           THEN 1 ELSE 0 END) AS step_27,
 
@@ -334,7 +334,7 @@ funnel_flags AS (
     MAX(CASE WHEN ue.mp_event_name = 'rewards_scape_task'
           AND a.ts_how_to_play IS NOT NULL
           AND a.ts_flow2_step0 IS NOT NULL AND ue.res_timestamp >= a.ts_flow2_step0
-          AND (ue.res_timestamp - a.ts_flow2_step0) / 60 <= 30
+          AND (ue.res_timestamp - a.ts_flow2_step0) / 60000 <= 30
           AND (a.ts_flow2_step1 IS NULL OR ue.res_timestamp <= a.ts_flow2_step1)
           THEN 1 ELSE 0 END) AS step_28,
 
@@ -342,7 +342,7 @@ funnel_flags AS (
     MAX(CASE WHEN ue.mp_event_name = 'click_dialog_exit' AND ue.dialog_id = '10013'
           AND a.ts_how_to_play IS NOT NULL
           AND a.ts_flow2_step0 IS NOT NULL AND ue.res_timestamp >= a.ts_flow2_step0
-          AND (ue.res_timestamp - a.ts_flow2_step0) / 60 <= 30
+          AND (ue.res_timestamp - a.ts_flow2_step0) / 60000 <= 30
           AND (a.ts_flow2_step1 IS NULL OR ue.res_timestamp <= a.ts_flow2_step1)
           THEN 1 ELSE 0 END) AS step_29,
 
@@ -350,14 +350,14 @@ funnel_flags AS (
     MAX(CASE WHEN ue.mp_event_name = 'impression_ftue_flow2_step1'
           AND a.ts_how_to_play IS NOT NULL
           AND a.ts_flow2_step0 IS NOT NULL
-          AND (ue.res_timestamp - a.ts_flow2_step0) / 60 <= 30
+          AND (ue.res_timestamp - a.ts_flow2_step0) / 60000 <= 30
           THEN 1 ELSE 0 END) AS step_30,
 
     -- Step 31: impression_dialog 10015 (between flow2_step1 and flow2_step2, within 30min of flow2_step1)
     MAX(CASE WHEN ue.mp_event_name = 'impression_dialog' AND ue.dialog_id = '10015'
           AND a.ts_how_to_play IS NOT NULL
           AND a.ts_flow2_step1 IS NOT NULL AND ue.res_timestamp >= a.ts_flow2_step1
-          AND (ue.res_timestamp - a.ts_flow2_step1) / 60 <= 30
+          AND (ue.res_timestamp - a.ts_flow2_step1) / 60000 <= 30
           AND (a.ts_flow2_step2 IS NULL OR ue.res_timestamp <= a.ts_flow2_step2)
           THEN 1 ELSE 0 END) AS step_31,
 
@@ -365,14 +365,14 @@ funnel_flags AS (
     MAX(CASE WHEN ue.mp_event_name = 'impression_ftue_flow2_step2'
           AND a.ts_how_to_play IS NOT NULL
           AND a.ts_flow2_step1 IS NOT NULL
-          AND (ue.res_timestamp - a.ts_flow2_step1) / 60 <= 30
+          AND (ue.res_timestamp - a.ts_flow2_step1) / 60000 <= 30
           THEN 1 ELSE 0 END) AS step_32,
 
     -- Step 33: ship_animation (between flow2_step2 and flow2_step5, within 30min of flow2_step2)
     MAX(CASE WHEN ue.mp_event_name = 'impression_ship_animation_started'
           AND a.ts_how_to_play IS NOT NULL
           AND a.ts_flow2_step2 IS NOT NULL AND ue.res_timestamp >= a.ts_flow2_step2
-          AND (ue.res_timestamp - a.ts_flow2_step2) / 60 <= 30
+          AND (ue.res_timestamp - a.ts_flow2_step2) / 60000 <= 30
           AND (a.ts_flow2_step5 IS NULL OR ue.res_timestamp <= a.ts_flow2_step5)
           THEN 1 ELSE 0 END) AS step_33,
 
@@ -380,13 +380,13 @@ funnel_flags AS (
     MAX(CASE WHEN ue.mp_event_name = 'impression_ftue_flow2_step5'
           AND a.ts_how_to_play IS NOT NULL
           AND a.ts_flow2_step2 IS NOT NULL
-          AND (ue.res_timestamp - a.ts_flow2_step2) / 60 <= 30
+          AND (ue.res_timestamp - a.ts_flow2_step2) / 60000 <= 30
           THEN 1 ELSE 0 END) AS step_34,
 
     -- Step 35: ftue_flow3_step0 (after how_to_play, within 30min of flow2_step5, buggy version handling)
     MAX(CASE WHEN a.ts_how_to_play IS NOT NULL
           AND a.ts_flow2_step5 IS NOT NULL
-          AND (ue.res_timestamp - a.ts_flow2_step5) / 60 <= 30
+          AND (ue.res_timestamp - a.ts_flow2_step5) / 60000 <= 30
           AND (
             (ue.is_buggy_ftue_flow3_version AND ue.mp_event_name = 'impression_ftue_flow3_step1') OR
             (NOT ue.is_buggy_ftue_flow3_version AND ue.mp_event_name = 'impression_ftue_flow3_step0')
@@ -397,14 +397,14 @@ funnel_flags AS (
     MAX(CASE WHEN ue.mp_event_name = 'scapes_tasks_new_chapter' AND ue.chapter = 2
           AND a.ts_how_to_play IS NOT NULL
           AND a.ts_flow3_step0 IS NOT NULL AND ue.res_timestamp >= a.ts_flow3_step0
-          AND (ue.res_timestamp - a.ts_flow3_step0) / 60 <= 30
+          AND (ue.res_timestamp - a.ts_flow3_step0) / 60000 <= 30
           AND (a.ts_flow3_step6_ch2 IS NULL OR ue.res_timestamp <= a.ts_flow3_step6_ch2)
           THEN 1 ELSE 0 END) AS step_36,
 
     -- Step 37: ftue_flow3_step1 ch2 (after how_to_play, within 30min of flow3_step0, buggy version handling)
     MAX(CASE WHEN a.ts_how_to_play IS NOT NULL
           AND a.ts_flow3_step0 IS NOT NULL
-          AND (ue.res_timestamp - a.ts_flow3_step0) / 60 <= 30
+          AND (ue.res_timestamp - a.ts_flow3_step0) / 60000 <= 30
           AND (
             (ue.is_buggy_ftue_flow3_version AND ue.mp_event_name = 'impression_ftue_flow3_step2' AND ue.chapter = 2) OR
             (NOT ue.is_buggy_ftue_flow3_version AND ue.mp_event_name = 'impression_ftue_flow3_step1' AND ue.chapter = 2)
@@ -414,7 +414,7 @@ funnel_flags AS (
     -- Step 38: ftue_flow3_step2 ch2 (after how_to_play, within 30min of flow3_step0, buggy version handling)
     MAX(CASE WHEN a.ts_how_to_play IS NOT NULL
           AND a.ts_flow3_step0 IS NOT NULL
-          AND (ue.res_timestamp - a.ts_flow3_step0) / 60 <= 30
+          AND (ue.res_timestamp - a.ts_flow3_step0) / 60000 <= 30
           AND (
             (ue.is_buggy_ftue_flow3_version AND ue.mp_event_name = 'impression_ftue_flow3_step3' AND ue.chapter = 2) OR
             (NOT ue.is_buggy_ftue_flow3_version AND ue.mp_event_name = 'impression_ftue_flow3_step2' AND ue.chapter = 2)
@@ -425,14 +425,14 @@ funnel_flags AS (
     MAX(CASE WHEN ue.mp_event_name = 'click_harvest_collect' AND ue.chapter = 2
           AND a.ts_how_to_play IS NOT NULL
           AND a.ts_flow3_step0 IS NOT NULL AND ue.res_timestamp >= a.ts_flow3_step0
-          AND (ue.res_timestamp - a.ts_flow3_step0) / 60 <= 30
+          AND (ue.res_timestamp - a.ts_flow3_step0) / 60000 <= 30
           AND (a.ts_flow3_step6_ch2 IS NULL OR ue.res_timestamp <= a.ts_flow3_step6_ch2)
           THEN 1 ELSE 0 END) AS step_39,
 
     -- Step 40: ftue_flow3_step6 ch2 (after how_to_play, within 30min of flow3_step0, buggy version handling)
     MAX(CASE WHEN a.ts_how_to_play IS NOT NULL
           AND a.ts_flow3_step0 IS NOT NULL
-          AND (ue.res_timestamp - a.ts_flow3_step0) / 60 <= 30
+          AND (ue.res_timestamp - a.ts_flow3_step0) / 60000 <= 30
           AND (
             (ue.is_buggy_ftue_flow3_version AND ue.mp_event_name = 'impression_ftue_flow3_step7' AND ue.chapter = 2) OR
             (NOT ue.is_buggy_ftue_flow3_version AND ue.mp_event_name = 'impression_ftue_flow3_step6' AND ue.chapter = 2)
@@ -443,14 +443,14 @@ funnel_flags AS (
     MAX(CASE WHEN ue.mp_event_name = 'click_reward_center'
           AND a.ts_how_to_play IS NOT NULL
           AND a.ts_flow3_step6_ch2 IS NOT NULL AND ue.res_timestamp >= a.ts_flow3_step6_ch2
-          AND (ue.res_timestamp - a.ts_flow3_step6_ch2) / 60 <= 30
+          AND (ue.res_timestamp - a.ts_flow3_step6_ch2) / 60000 <= 30
           AND (a.ts_flow3_step8_ch2 IS NULL OR ue.res_timestamp <= a.ts_flow3_step8_ch2)
           THEN 1 ELSE 0 END) AS step_41,
 
     -- Step 42: ftue_flow3_step8 ch2 (after how_to_play, within 30min of flow3_step6_ch2, buggy version handling)
     MAX(CASE WHEN a.ts_how_to_play IS NOT NULL
           AND a.ts_flow3_step6_ch2 IS NOT NULL
-          AND (ue.res_timestamp - a.ts_flow3_step6_ch2) / 60 <= 30
+          AND (ue.res_timestamp - a.ts_flow3_step6_ch2) / 60000 <= 30
           AND (
             (ue.is_buggy_ftue_flow3_version AND ue.mp_event_name = 'impression_ftue_flow3_step9' AND ue.chapter = 2) OR
             (NOT ue.is_buggy_ftue_flow3_version AND ue.mp_event_name = 'impression_ftue_flow3_step8' AND ue.chapter = 2)
@@ -461,28 +461,28 @@ funnel_flags AS (
     MAX(CASE WHEN ue.mp_event_name = 'impression_ftue_flow12_step0'
           AND a.ts_how_to_play IS NOT NULL
           AND a.ts_flow3_step8_ch2 IS NOT NULL AND ue.res_timestamp >= a.ts_flow3_step8_ch2
-          AND (ue.res_timestamp - a.ts_flow3_step8_ch2) / 60 <= 30
+          AND (ue.res_timestamp - a.ts_flow3_step8_ch2) / 60000 <= 30
           THEN 1 ELSE 0 END) AS step_43,
 
     -- Step 44: ftue_flow12_step4 (after flow3_step8_ch2, within 30min of flow3_step8_ch2)
     MAX(CASE WHEN ue.mp_event_name = 'impression_ftue_flow12_step4'
           AND a.ts_how_to_play IS NOT NULL
           AND a.ts_flow3_step8_ch2 IS NOT NULL AND ue.res_timestamp >= a.ts_flow3_step8_ch2
-          AND (ue.res_timestamp - a.ts_flow3_step8_ch2) / 60 <= 30
+          AND (ue.res_timestamp - a.ts_flow3_step8_ch2) / 60000 <= 30
           THEN 1 ELSE 0 END) AS step_44,
 
     -- Step 45: scapes_tasks_new_chapter ch3 (after flow3_step8_ch2, within 30min of flow3_step8_ch2)
     MAX(CASE WHEN ue.mp_event_name = 'scapes_tasks_new_chapter' AND ue.chapter = 3
           AND a.ts_how_to_play IS NOT NULL
           AND a.ts_flow3_step8_ch2 IS NOT NULL AND ue.res_timestamp >= a.ts_flow3_step8_ch2
-          AND (ue.res_timestamp - a.ts_flow3_step8_ch2) / 60 <= 30
+          AND (ue.res_timestamp - a.ts_flow3_step8_ch2) / 60000 <= 30
           THEN 1 ELSE 0 END) AS step_45,
 
     -- Step 46: click_harvest_collect ch3 (after flow3_step8_ch2, within 30min of flow3_step8_ch2)
     MAX(CASE WHEN ue.mp_event_name = 'click_harvest_collect' AND ue.chapter = 3
           AND a.ts_how_to_play IS NOT NULL
           AND a.ts_flow3_step8_ch2 IS NOT NULL AND ue.res_timestamp >= a.ts_flow3_step8_ch2
-          AND (ue.res_timestamp - a.ts_flow3_step8_ch2) / 60 <= 30
+          AND (ue.res_timestamp - a.ts_flow3_step8_ch2) / 60000 <= 30
           THEN 1 ELSE 0 END) AS step_46
 
   FROM user_events ue
