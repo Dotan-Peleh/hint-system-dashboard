@@ -521,7 +521,8 @@ def main():
             out = out[out['is_usa'] == selected_usa_only]
         return out
 
-    # --- BA tab data: only demographic filters, NO date/version/period from sidebar ---
+    # --- BA tab data: all sidebar filters EXCEPT date range, version, and period ---
+    # (BA tab has its own date pickers and version selectors)
     def apply_ba_filters_ftue(df):
         if df.empty:
             return df
@@ -531,6 +532,10 @@ def main():
             out = out[out['platform'].isin(selected_platforms)]
         if selected_countries is not None and 'country' in out.columns:
             out = out[out['country'].isin(selected_countries)]
+        if selected_weeks and 'install_week' in out.columns:
+            out = out[out['install_week'].isin(selected_weeks)]
+        if selected_months and 'install_month' in out.columns:
+            out = out[out['install_month'].isin(selected_months)]
         if selected_mediasource is not None and 'mediasource' in out.columns:
             out = out[out['mediasource'].isin(selected_mediasource)]
         if selected_media_type is not None and 'media_type' in out.columns:
@@ -646,8 +651,8 @@ def main():
     with tab_ba:
         st.markdown('<div class="legend-box">'
                     'Pick <b>versions + date range</b> independently for Before and After. '
-                    'Each version line shows its weighted-average funnel for the selected dates. '
-                    'Toggle <b>Show Average</b> to overlay a combined average line across all versions in each group. '
+                    'Sidebar filters (platform, country, media source, etc.) apply here too — '
+                    'only <b>date range, version, and period</b> are controlled below instead of the sidebar. '
                     '<strong style="color:#5B8DEF">Blue</strong> = Before &nbsp;&nbsp;'
                     '<strong style="color:#2ECB71">Green</strong> = After'
                     '</div>', unsafe_allow_html=True)
