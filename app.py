@@ -384,6 +384,35 @@ def parse_url_params():
             params['low_payers'] = val
     if 'ch45' in qp:
         params['ch45'] = qp['ch45'] == '1'
+    # Before/After tab params
+    if 'tab' in qp:
+        params['tab'] = qp['tab']
+    if 'before_ver' in qp:
+        params['before_ver'] = _csv_param(qp, 'before_ver')
+    if 'after_ver' in qp:
+        params['after_ver'] = _csv_param(qp, 'after_ver')
+    for prefix in ('before', 'after'):
+        for suffix, parser in [('sd', date.fromisoformat), ('ed', date.fromisoformat), ('sh', int), ('eh', int)]:
+            key = f'{prefix}_{suffix}'
+            if key in qp:
+                try:
+                    params[key] = parser(qp[key])
+                except (ValueError, TypeError):
+                    pass
+    if 'ba_metric' in qp:
+        params['ba_metric'] = qp['ba_metric']
+    if 'ba_avg' in qp:
+        params['ba_avg'] = qp['ba_avg'] != '0'
+    if 'ba_plat' in qp:
+        params['ba_plat'] = _csv_param(qp, 'ba_plat')
+    if 'ba_country' in qp:
+        params['ba_country'] = _csv_param(qp, 'ba_country')
+    if 'ba_ms' in qp:
+        params['ba_ms'] = _csv_param(qp, 'ba_ms')
+    if 'ba_mt' in qp:
+        params['ba_mt'] = _csv_param(qp, 'ba_mt')
+    if 'ba_lp' in qp:
+        params['ba_lp'] = qp['ba_lp']
     return params
 
 def update_url_params(**kwargs):
@@ -590,20 +619,21 @@ def main():
 
         # (Run button is at the top of the form)
 
-    # --- Update URL with current filter state ---
-    update_url_params(
-        versions=selected_versions,
-        start_date=start_date,
-        end_date=end_date,
-        start_hour=start_hour,
-        end_hour=end_hour,
-        platforms=selected_platforms,
-        countries=[str(c) for c in selected_countries] if selected_countries else None,
-        mediasource=[str(m) for m in selected_mediasource] if selected_mediasource else None,
-        media_type=[str(m) for m in selected_media_type] if selected_media_type else None,
-        low_payers=sel_lp if sel_lp != "All" else None,
-        ch45=st.session_state.get('include_ch4_ch5', False),
-    )
+    # --- Update URL with current filter state (only if not on BA tab via shared link) ---
+    if url_params.get('tab') != 'ba':
+        update_url_params(
+            versions=selected_versions,
+            start_date=start_date,
+            end_date=end_date,
+            start_hour=start_hour,
+            end_hour=end_hour,
+            platforms=selected_platforms,
+            countries=[str(c) for c in selected_countries] if selected_countries else None,
+            mediasource=[str(m) for m in selected_mediasource] if selected_mediasource else None,
+            media_type=[str(m) for m in selected_media_type] if selected_media_type else None,
+            low_payers=sel_lp if sel_lp != "All" else None,
+            ch45=st.session_state.get('include_ch4_ch5', False),
+        )
 
     # =========================================================================
     # APPLY FILTERS
@@ -758,27 +788,37 @@ def main():
             baf1, baf2, baf3 = st.columns(3)
             with baf1:
                 ba_plat_opts = sorted(fdf_ba['platform'].dropna().unique().tolist()) if not fdf_ba.empty and 'platform' in fdf_ba.columns else []
-                ba_selected_platforms = st.multiselect("Platform", ba_plat_opts, default=ba_plat_opts, key="ba_f_plat")
+                url_ba_plat = url_params.get('ba_plat')
+                ba_plat_default = [p for p in ba_plat_opts if p in url_ba_plat] if url_ba_plat else ba_plat_opts
+                ba_selected_platforms = st.multiselect("Platform", ba_plat_opts, default=ba_plat_default, key="ba_f_plat")
             with baf2:
                 ba_c_labels, ba_c_map, _ = opts_with_counts(fdf_ba, 'country') if not fdf_ba.empty else ([], {}, [])
-                ba_sel_c = st.multiselect("Country", ba_c_labels, default=[], key="ba_f_country")
+                url_ba_c = url_params.get('ba_country', [])
+                ba_c_default = [l for l in ba_c_labels if str(ba_c_map[l]) in url_ba_c] if url_ba_c else []
+                ba_sel_c = st.multiselect("Country", ba_c_labels, default=ba_c_default, key="ba_f_country")
                 ba_selected_countries = [ba_c_map[l] for l in ba_sel_c] if ba_sel_c else None
             with baf3:
                 ba_lp_opts = sorted(fdf_ba['is_low_payers_country'].dropna().unique().tolist()) if not fdf_ba.empty and 'is_low_payers_country' in fdf_ba.columns else []
                 ba_lp_display = {0: 'No', 1: 'Yes'}
                 ba_lp_labels = [ba_lp_display.get(v, str(v)) for v in ba_lp_opts]
                 ba_lp_map = dict(zip(ba_lp_labels, ba_lp_opts))
-                ba_sel_lp = st.selectbox("Is Low Payers", ["All"] + ba_lp_labels, index=0, key="ba_f_lp")
+                url_ba_lp = url_params.get('ba_lp')
+                ba_lp_index = (["All"] + ba_lp_labels).index(url_ba_lp) if url_ba_lp and url_ba_lp in (["All"] + ba_lp_labels) else 0
+                ba_sel_lp = st.selectbox("Is Low Payers", ["All"] + ba_lp_labels, index=ba_lp_index, key="ba_f_lp")
                 ba_selected_low_payers = ba_lp_map[ba_sel_lp] if ba_sel_lp != "All" else None
 
             baf4, baf5, baf6 = st.columns(3)
             with baf4:
                 ba_ms_labels, ba_ms_map, _ = opts_with_counts(fdf_ba, 'mediasource') if not fdf_ba.empty else ([], {}, [])
-                ba_sel_ms = st.multiselect("Media Source", ba_ms_labels, default=[], key="ba_f_ms")
+                url_ba_ms = url_params.get('ba_ms', [])
+                ba_ms_default = [l for l in ba_ms_labels if any(str(ba_ms_map[l]) == str(m) for m in url_ba_ms)] if url_ba_ms else []
+                ba_sel_ms = st.multiselect("Media Source", ba_ms_labels, default=ba_ms_default, key="ba_f_ms")
                 ba_selected_mediasource = [ba_ms_map[l] for l in ba_sel_ms] if ba_sel_ms else None
             with baf5:
                 ba_mt_labels, ba_mt_map, _ = opts_with_counts(fdf_ba, 'media_type') if not fdf_ba.empty else ([], {}, [])
-                ba_sel_mt = st.multiselect("Media Type", ba_mt_labels, default=[], key="ba_f_mt")
+                url_ba_mt = url_params.get('ba_mt', [])
+                ba_mt_default = [l for l in ba_mt_labels if any(str(ba_mt_map[l]) == str(m) for m in url_ba_mt)] if url_ba_mt else []
+                ba_sel_mt = st.multiselect("Media Type", ba_mt_labels, default=ba_mt_default, key="ba_f_mt")
                 ba_selected_media_type = [ba_mt_map[l] for l in ba_sel_mt] if ba_sel_mt else None
             with baf6:
                 ba_usa_opt = st.selectbox("Country (Retention)", ["All", "US Only", "Non-US"], index=0, key="ba_f_usa")
@@ -828,7 +868,9 @@ def main():
             vdf = ba_filter_date_hour(vdf, ds, de, sh, eh)
             return int(vdf['total_users'].sum()) if 'total_users' in vdf.columns else len(vdf)
 
-        # Default version for Before/After
+        # Default version for Before/After (from URL or fallback to DEFAULT_VERSION)
+        url_before_ver = url_params.get('before_ver')
+        url_after_ver = url_params.get('after_ver')
         default_ba_ver = [v for v in ba_versions_available if v.startswith(DEFAULT_VERSION)]
         if not default_ba_ver:
             default_ba_ver = [ba_versions_available[0]] if ba_versions_available else []
@@ -840,17 +882,22 @@ def main():
         with col_before:
             st.markdown(f'<div style="background:#EBF5FB;padding:10px 16px;border-radius:8px;border-left:4px solid {COLORS["before"]};margin-bottom:12px;">'
                         f'<b style="color:{COLORS["before"]};font-size:1.1em;">BEFORE</b></div>', unsafe_allow_html=True)
+            before_ver_default = [v for v in ba_versions_available if v in url_before_ver] if url_before_ver else default_ba_ver
             before_versions = st.multiselect("Versions", ba_versions_available,
-                default=default_ba_ver, key="ba_before_vers")
+                default=before_ver_default, key="ba_before_vers")
             bc1, bch1, bc2, bch2 = st.columns([2, 1, 2, 1])
+            url_bsd = url_params.get('before_sd', ba_min_date)
+            url_bsd = max(ba_min_date, min(ba_max_date, url_bsd)) if isinstance(url_bsd, date) else ba_min_date
+            url_bed = url_params.get('before_ed', TEST_START_DATE if TEST_START_DATE <= ba_max_date else ba_max_date)
+            url_bed = max(ba_min_date, min(ba_max_date, url_bed)) if isinstance(url_bed, date) else (TEST_START_DATE if TEST_START_DATE <= ba_max_date else ba_max_date)
             with bc1:
-                before_start = st.date_input("Start", value=ba_min_date, min_value=ba_min_date, max_value=ba_max_date, key="ba_before_start")
+                before_start = st.date_input("Start", value=url_bsd, min_value=ba_min_date, max_value=ba_max_date, key="ba_before_start")
             with bch1:
-                before_start_hour = st.number_input("Hour", min_value=0, max_value=23, value=0, key="ba_before_start_h")
+                before_start_hour = st.number_input("Hour", min_value=0, max_value=23, value=url_params.get('before_sh', 0), key="ba_before_start_h")
             with bc2:
-                before_end = st.date_input("End", value=TEST_START_DATE if TEST_START_DATE <= ba_max_date else ba_max_date, min_value=ba_min_date, max_value=ba_max_date, key="ba_before_end")
+                before_end = st.date_input("End", value=url_bed, min_value=ba_min_date, max_value=ba_max_date, key="ba_before_end")
             with bch2:
-                before_end_hour = st.number_input("Hour", min_value=0, max_value=23, value=TEST_START_HOUR - 1 if TEST_START_HOUR > 0 else 23, key="ba_before_end_h")
+                before_end_hour = st.number_input("Hour", min_value=0, max_value=23, value=url_params.get('before_eh', TEST_START_HOUR - 1 if TEST_START_HOUR > 0 else 23), key="ba_before_end_h")
             if before_versions:
                 st.markdown(" | ".join([f"v{v}: **{ba_installs(v, before_start, before_end, before_start_hour, before_end_hour):,}**" for v in before_versions]))
         with col_vs:
@@ -858,32 +905,78 @@ def main():
         with col_after:
             st.markdown(f'<div style="background:#EAFAF1;padding:10px 16px;border-radius:8px;border-left:4px solid {COLORS["after"]};margin-bottom:12px;">'
                         f'<b style="color:{COLORS["after"]};font-size:1.1em;">AFTER</b></div>', unsafe_allow_html=True)
+            after_ver_default = [v for v in ba_versions_available if v in url_after_ver] if url_after_ver else default_ba_ver
             after_versions = st.multiselect("Versions", ba_versions_available,
-                default=default_ba_ver, key="ba_after_vers")
+                default=after_ver_default, key="ba_after_vers")
             ac1, ach1, ac2, ach2 = st.columns([2, 1, 2, 1])
+            url_asd = url_params.get('after_sd', TEST_START_DATE if TEST_START_DATE <= ba_max_date else ba_min_date)
+            url_asd = max(ba_min_date, min(ba_max_date, url_asd)) if isinstance(url_asd, date) else (TEST_START_DATE if TEST_START_DATE <= ba_max_date else ba_min_date)
+            url_aed = url_params.get('after_ed', ba_max_date)
+            url_aed = max(ba_min_date, min(ba_max_date, url_aed)) if isinstance(url_aed, date) else ba_max_date
             with ac1:
-                after_start = st.date_input("Start", value=TEST_START_DATE if TEST_START_DATE <= ba_max_date else ba_min_date, min_value=ba_min_date, max_value=ba_max_date, key="ba_after_start")
+                after_start = st.date_input("Start", value=url_asd, min_value=ba_min_date, max_value=ba_max_date, key="ba_after_start")
             with ach1:
-                after_start_hour = st.number_input("Hour", min_value=0, max_value=23, value=TEST_START_HOUR, key="ba_after_start_h")
+                after_start_hour = st.number_input("Hour", min_value=0, max_value=23, value=url_params.get('after_sh', TEST_START_HOUR), key="ba_after_start_h")
             with ac2:
-                after_end = st.date_input("End", value=ba_max_date, min_value=ba_min_date, max_value=ba_max_date, key="ba_after_end")
+                after_end = st.date_input("End", value=url_aed, min_value=ba_min_date, max_value=ba_max_date, key="ba_after_end")
             with ach2:
-                after_end_hour = st.number_input("Hour", min_value=0, max_value=23, value=23, key="ba_after_end_h")
+                after_end_hour = st.number_input("Hour", min_value=0, max_value=23, value=url_params.get('after_eh', 23), key="ba_after_end_h")
             if after_versions:
                 st.markdown(" | ".join([f"v{v}: **{ba_installs(v, after_start, after_end, after_start_hour, after_end_hour):,}**" for v in after_versions]))
 
         # --- Options ---
-        opt1, opt2, opt3 = st.columns([2, 1, 1])
+        opt1, opt2, opt3, opt4 = st.columns([2, 1, 1, 1])
         with opt1:
             ba_metric_options = ["Conversion vs Step 1"]
             ratio_cols_ba = get_ratio_columns(fdf_ba) if not fdf_ba.empty else []
             if ratio_cols_ba:
                 ba_metric_options.append("Conversion vs Previous Step")
-            ba_metric_set = st.selectbox("Metric set", ba_metric_options, key="ba_metric_set")
+            url_ba_metric_idx = 1 if url_params.get('ba_metric') == 'ratio' and len(ba_metric_options) > 1 else 0
+            ba_metric_set = st.selectbox("Metric set", ba_metric_options, index=url_ba_metric_idx, key="ba_metric_set")
         with opt2:
-            show_avg = st.checkbox("Show Average", value=True, key="ba_show_avg")
+            show_avg = st.checkbox("Show Average", value=url_params.get('ba_avg', True), key="ba_show_avg")
         with opt3:
-            st.checkbox("Include Ch 4 & 5", value=False, key="include_ch4_ch5")
+            st.checkbox("Include Ch 4 & 5", value=url_params.get('ch45', False), key="include_ch4_ch5")
+        with opt4:
+            # Build share URL with all BA filters
+            ba_params = {}
+            ba_params['tab'] = 'ba'
+            if before_versions:
+                ba_params['before_ver'] = ','.join(before_versions)
+            ba_params['before_sd'] = str(before_start)
+            ba_params['before_sh'] = str(before_start_hour)
+            ba_params['before_ed'] = str(before_end)
+            ba_params['before_eh'] = str(before_end_hour)
+            if after_versions:
+                ba_params['after_ver'] = ','.join(after_versions)
+            ba_params['after_sd'] = str(after_start)
+            ba_params['after_sh'] = str(after_start_hour)
+            ba_params['after_ed'] = str(after_end)
+            ba_params['after_eh'] = str(after_end_hour)
+            if ba_metric_set != "Conversion vs Step 1":
+                ba_params['ba_metric'] = 'ratio'
+            if not show_avg:
+                ba_params['ba_avg'] = '0'
+            if st.session_state.get('include_ch4_ch5', False):
+                ba_params['ch45'] = '1'
+            if ba_selected_platforms and ba_plat_opts and set(ba_selected_platforms) != set(ba_plat_opts):
+                ba_params['ba_plat'] = ','.join(ba_selected_platforms)
+            if ba_selected_countries:
+                ba_params['ba_country'] = ','.join(str(c) for c in ba_selected_countries)
+            if ba_selected_mediasource:
+                ba_params['ba_ms'] = ','.join(str(m) for m in ba_selected_mediasource)
+            if ba_selected_media_type:
+                ba_params['ba_mt'] = ','.join(str(m) for m in ba_selected_media_type)
+            if ba_sel_lp != "All":
+                ba_params['ba_lp'] = ba_sel_lp
+            share_qs = '&'.join(f'{k}={v}' for k, v in ba_params.items())
+            share_url = f"?{share_qs}"
+            st.markdown(
+                f'<a href="{share_url}" target="_self" style="display:inline-block;margin-top:28px;padding:4px 12px;'
+                f'background:#5B8DEF;color:white;border-radius:6px;text-decoration:none;font-size:13px;">'
+                f'Copy Share Link</a>',
+                unsafe_allow_html=True
+            )
 
         has_ftue = not fdf_ba.empty
         has_ret = not rdf_ba.empty
