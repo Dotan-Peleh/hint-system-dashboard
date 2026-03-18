@@ -480,9 +480,6 @@ def main():
             selected_low_payers = lp_map[sel_lp] if sel_lp != "All" else None
 
         st.markdown("---")
-        include_ch4_ch5 = st.checkbox("Include Chapter 4 & 5 steps", value=False, key="include_ch4_ch5")
-
-        st.markdown("---")
         st.markdown("### Retention Filters")
         selected_usa_only = None
         if not ret_df.empty and 'is_usa' in ret_df.columns:
@@ -764,7 +761,7 @@ def main():
                 st.markdown(" | ".join([f"v{v}: **{ba_installs(v, after_start, after_end, after_start_hour, after_end_hour):,}**" for v in after_versions]))
 
         # --- Options ---
-        opt1, opt2 = st.columns([2, 1])
+        opt1, opt2, opt3 = st.columns([2, 1, 1])
         with opt1:
             ba_metric_options = ["Conversion vs Step 1"]
             ratio_cols_ba = get_ratio_columns(fdf_ba) if not fdf_ba.empty else []
@@ -773,6 +770,8 @@ def main():
             ba_metric_set = st.selectbox("Metric set", ba_metric_options, key="ba_metric_set")
         with opt2:
             show_avg = st.checkbox("Show Average", value=True, key="ba_show_avg")
+        with opt3:
+            st.checkbox("Include Ch 4 & 5", value=False, key="include_ch4_ch5")
 
         has_ftue = not fdf_ba.empty
         has_ret = not rdf_ba.empty
