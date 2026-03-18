@@ -184,9 +184,11 @@ funnel_flags AS (
           AND (ue.res_timestamp - a.ts_privacy) / 60000 <= 30
           THEN 1 ELSE 0 END) AS step_06,
 
-    -- Step 07: ftue_flow1_step1 (within 30min of flow1_step0)
+    -- Step 07: ftue_flow1_step1 (within 30min of flow1_step0, and flow1_step0 itself within 30min of privacy)
     MAX(CASE WHEN ue.mp_event_name = 'impression_ftue_flow1_step1'
           AND a.ts_flow1_step0 IS NOT NULL
+          AND a.ts_privacy IS NOT NULL
+          AND (a.ts_flow1_step0 - a.ts_privacy) / 60000 <= 30
           AND (ue.res_timestamp - a.ts_flow1_step0) / 60000 <= 30
           THEN 1 ELSE 0 END) AS step_07,
 
@@ -392,10 +394,11 @@ funnel_flags AS (
           )
           THEN 1 ELSE 0 END) AS step_35,
 
-    -- Step 36: scapes_tasks_new_chapter ch2 (between flow3_step0 and flow3_step6_ch2 — no 30min, bounded by anchors)
+    -- Step 36: scapes_tasks_new_chapter ch2 (between flow3_step0 and flow3_step6_ch2, within 30min of flow3_step0)
     MAX(CASE WHEN ue.mp_event_name = 'scapes_tasks_new_chapter' AND ue.chapter = 2
           AND a.ts_how_to_play IS NOT NULL
           AND a.ts_flow3_step0 IS NOT NULL AND ue.res_timestamp >= a.ts_flow3_step0
+          AND (ue.res_timestamp - a.ts_flow3_step0) / 60000 <= 30
           AND (a.ts_flow3_step6_ch2 IS NULL OR ue.res_timestamp <= a.ts_flow3_step6_ch2)
           THEN 1 ELSE 0 END) AS step_36,
 
@@ -437,10 +440,11 @@ funnel_flags AS (
           )
           THEN 1 ELSE 0 END) AS step_40,
 
-    -- Step 41: click_reward_center (between flow3_step6_ch2 and flow3_step8_ch2 — no 30min, bounded by anchors)
+    -- Step 41: click_reward_center (between flow3_step6_ch2 and flow3_step8_ch2, within 30min of flow3_step6_ch2)
     MAX(CASE WHEN ue.mp_event_name = 'click_reward_center'
           AND a.ts_how_to_play IS NOT NULL
           AND a.ts_flow3_step6_ch2 IS NOT NULL AND ue.res_timestamp >= a.ts_flow3_step6_ch2
+          AND (ue.res_timestamp - a.ts_flow3_step6_ch2) / 60000 <= 30
           AND (a.ts_flow3_step8_ch2 IS NULL OR ue.res_timestamp <= a.ts_flow3_step8_ch2)
           THEN 1 ELSE 0 END) AS step_41,
 

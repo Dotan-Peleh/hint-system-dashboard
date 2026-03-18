@@ -6,12 +6,15 @@ REGION="us-central1"
 PROJECT="yotam-395120"
 PROJECT_NUMBER="57935720907"
 
+# Ensure we deploy from the script's directory
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
 echo ""
 echo "Deploying: $DASHBOARD_NAME"
 echo ""
 
 gcloud beta run deploy $DASHBOARD_NAME \
-  --source . \
+  --source "$SCRIPT_DIR" \
   --region $REGION \
   --project $PROJECT \
   --no-allow-unauthenticated \
