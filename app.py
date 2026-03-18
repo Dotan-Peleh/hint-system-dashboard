@@ -339,6 +339,82 @@ def delta_tag(val, fmt="+.1f", suffix="%"):
 # MAIN
 # =============================================================================
 
+def _csv_param(qp, key):
+    """Read a comma-separated URL param as a list."""
+    val = qp.get(key, '')
+    return [v.strip() for v in val.split(',') if v.strip()] if val else []
+
+def parse_url_params():
+    """Read URL query params and return a dict of filter defaults."""
+    qp = st.query_params
+    params = {}
+    if 'version' in qp:
+        params['version'] = _csv_param(qp, 'version')
+    if 'platform' in qp:
+        params['platform'] = _csv_param(qp, 'platform')
+    if 'start_date' in qp:
+        try:
+            params['start_date'] = date.fromisoformat(qp['start_date'])
+        except (ValueError, TypeError):
+            pass
+    if 'end_date' in qp:
+        try:
+            params['end_date'] = date.fromisoformat(qp['end_date'])
+        except (ValueError, TypeError):
+            pass
+    if 'start_hour' in qp:
+        try:
+            params['start_hour'] = int(qp['start_hour'])
+        except (ValueError, TypeError):
+            pass
+    if 'end_hour' in qp:
+        try:
+            params['end_hour'] = int(qp['end_hour'])
+        except (ValueError, TypeError):
+            pass
+    if 'country' in qp:
+        params['country'] = _csv_param(qp, 'country')
+    if 'mediasource' in qp:
+        params['mediasource'] = _csv_param(qp, 'mediasource')
+    if 'media_type' in qp:
+        params['media_type'] = _csv_param(qp, 'media_type')
+    if 'low_payers' in qp:
+        val = qp['low_payers']
+        if val in ('Yes', 'No'):
+            params['low_payers'] = val
+    if 'ch45' in qp:
+        params['ch45'] = qp['ch45'] == '1'
+    return params
+
+def update_url_params(**kwargs):
+    """Write current filter state to URL query params."""
+    qp = {}
+    if kwargs.get('versions'):
+        qp['version'] = ','.join(str(v) for v in kwargs['versions'])
+    if kwargs.get('start_date'):
+        qp['start_date'] = str(kwargs['start_date'])
+    if kwargs.get('end_date'):
+        qp['end_date'] = str(kwargs['end_date'])
+    if kwargs.get('start_hour') is not None and kwargs['start_hour'] != 0:
+        qp['start_hour'] = str(kwargs['start_hour'])
+    if kwargs.get('end_hour') is not None and kwargs['end_hour'] != 23:
+        qp['end_hour'] = str(kwargs['end_hour'])
+    if kwargs.get('platforms'):
+        qp['platform'] = ','.join(str(p) for p in kwargs['platforms'])
+    if kwargs.get('countries'):
+        qp['country'] = ','.join(str(c) for c in kwargs['countries'])
+    if kwargs.get('mediasource'):
+        qp['mediasource'] = ','.join(str(m) for m in kwargs['mediasource'])
+    if kwargs.get('media_type'):
+        qp['media_type'] = ','.join(str(m) for m in kwargs['media_type'])
+    if kwargs.get('low_payers'):
+        qp['low_payers'] = kwargs['low_payers']
+    if kwargs.get('ch45'):
+        qp['ch45'] = '1'
+    st.query_params.clear()
+    st.query_params.update(qp)
+
+
 def main():
     st.set_page_config(
         page_title="Hint System Dashboard",
@@ -347,6 +423,8 @@ def main():
         initial_sidebar_state="expanded",
     )
     inject_css()
+
+    url_params = parse_url_params()
 
     st.markdown("## Hint System Dashboard")
     st.caption(f"Comparing FTUE funnel & retention before vs after test start ({TEST_START_DATE.strftime('%b %d, %Y')})")
@@ -406,14 +484,18 @@ def main():
         max_date = max(all_dates) if all_dates else date.today()
 
         sd_col, sh_col, ed_col, eh_col = st.columns([2, 1, 2, 1])
+        url_sd = url_params.get('start_date', min_date)
+        url_sd = max(min_date, min(max_date, url_sd)) if isinstance(url_sd, date) else min_date
+        url_ed = url_params.get('end_date', max_date)
+        url_ed = max(min_date, min(max_date, url_ed)) if isinstance(url_ed, date) else max_date
         with sd_col:
-            start_date = st.date_input("Start Date", value=min_date, min_value=min_date, max_value=max_date, key="sd")
+            start_date = st.date_input("Start Date", value=url_sd, min_value=min_date, max_value=max_date, key="sd")
         with sh_col:
-            start_hour = st.number_input("Hour", min_value=0, max_value=23, value=0, key="sd_hour")
+            start_hour = st.number_input("Hour", min_value=0, max_value=23, value=url_params.get('start_hour', 0), key="sd_hour")
         with ed_col:
-            end_date = st.date_input("End Date", value=max_date, min_value=min_date, max_value=max_date, key="ed")
+            end_date = st.date_input("End Date", value=url_ed, min_value=min_date, max_value=max_date, key="ed")
         with eh_col:
-            end_hour = st.number_input("Hour", min_value=0, max_value=23, value=23, key="ed_hour")
+            end_hour = st.number_input("Hour", min_value=0, max_value=23, value=url_params.get('end_hour', 23), key="ed_hour")
         date_range = (start_date, end_date)
 
         st.markdown("---")
@@ -439,44 +521,59 @@ def main():
                 lbl = f"{rv} (ret only)"
                 ver_labels.append(lbl)
                 ver_map[lbl] = rv
-        # Default to 0.3811 only
-        default_ver = [l for l in ver_labels if l.startswith('0.3811')]
+        # Default from URL params, or fall back to 0.3811
+        url_ver = url_params.get('version')
+        if url_ver:
+            default_ver = [l for l in ver_labels if any(l.startswith(str(v)) for v in url_ver)]
+        else:
+            default_ver = [l for l in ver_labels if l.startswith('0.3811')]
         selected_ver_labels = st.multiselect("Version", ver_labels, default=default_ver if default_ver else ver_labels)
         selected_versions = [str(ver_map.get(l, l)) for l in selected_ver_labels]
 
         # Platform
         plat_opts = sorted(ftue_df['platform'].dropna().unique().tolist()) if not ftue_df.empty and 'platform' in ftue_df.columns else (sorted(ret_df['platform'].dropna().unique().tolist()) if not ret_df.empty else [])
-        selected_platforms = st.multiselect("Platform", plat_opts, default=plat_opts) if plat_opts else []
+        url_plat = url_params.get('platform')
+        plat_default = [p for p in plat_opts if p in url_plat] if url_plat else plat_opts
+        selected_platforms = st.multiselect("Platform", plat_opts, default=plat_default) if plat_opts else []
 
         # Media Source
         selected_mediasource = None
         if not ftue_df.empty and 'mediasource' in ftue_df.columns:
             ms_labels, ms_map, _ = opts_with_counts(ftue_df, 'mediasource')
-            sel_ms_labels = st.multiselect("Media Source", ms_labels, default=[])
+            url_ms = url_params.get('mediasource', [])
+            ms_default = [l for l in ms_labels if any(str(ms_map[l]) == str(m) for m in url_ms)] if url_ms else []
+            sel_ms_labels = st.multiselect("Media Source", ms_labels, default=ms_default)
             selected_mediasource = [ms_map[l] for l in sel_ms_labels] if sel_ms_labels else None
 
         # Media Type
         selected_media_type = None
         if not ftue_df.empty and 'media_type' in ftue_df.columns:
             mt_labels, mt_map, _ = opts_with_counts(ftue_df, 'media_type')
-            sel_mt_labels = st.multiselect("Media Type", mt_labels, default=[])
+            url_mt = url_params.get('media_type', [])
+            mt_default = [l for l in mt_labels if any(str(mt_map[l]) == str(m) for m in url_mt)] if url_mt else []
+            sel_mt_labels = st.multiselect("Media Type", mt_labels, default=mt_default)
             selected_media_type = [mt_map[l] for l in sel_mt_labels] if sel_mt_labels else None
 
         # Country with user counts
         selected_countries = None
         if not ftue_df.empty and 'country' in ftue_df.columns:
             c_labels, c_map, _ = opts_with_counts(ftue_df, 'country')
-            sel_c_labels = st.multiselect("Country", c_labels, default=[])
+            url_c = url_params.get('country', [])
+            c_default = [l for l in c_labels if str(c_map[l]) in url_c] if url_c else []
+            sel_c_labels = st.multiselect("Country", c_labels, default=c_default)
             selected_countries = [c_map[l] for l in sel_c_labels] if sel_c_labels else None
 
         # Is Low Payers
         selected_low_payers = None
+        sel_lp = "All"
         if not ftue_df.empty and 'is_low_payers_country' in ftue_df.columns:
             lp_opts = sorted(ftue_df['is_low_payers_country'].dropna().unique().tolist())
             lp_display = {0: 'No', 1: 'Yes'}
             lp_labels = [lp_display.get(v, str(v)) for v in lp_opts]
             lp_map = dict(zip(lp_labels, lp_opts))
-            sel_lp = st.selectbox("Is Low Payers", ["All"] + lp_labels, index=0)
+            url_lp = url_params.get('low_payers')
+            lp_index = (["All"] + lp_labels).index(url_lp) if url_lp and url_lp in (["All"] + lp_labels) else 0
+            sel_lp = st.selectbox("Is Low Payers", ["All"] + lp_labels, index=lp_index)
             selected_low_payers = lp_map[sel_lp] if sel_lp != "All" else None
 
         st.markdown("---")
@@ -492,6 +589,21 @@ def main():
         st.caption("Note: values in brackets show total users for each option.")
 
         # (Run button is at the top of the form)
+
+    # --- Update URL with current filter state ---
+    update_url_params(
+        versions=selected_versions,
+        start_date=start_date,
+        end_date=end_date,
+        start_hour=start_hour,
+        end_hour=end_hour,
+        platforms=selected_platforms,
+        countries=[str(c) for c in selected_countries] if selected_countries else None,
+        mediasource=[str(m) for m in selected_mediasource] if selected_mediasource else None,
+        media_type=[str(m) for m in selected_media_type] if selected_media_type else None,
+        low_payers=sel_lp if sel_lp != "All" else None,
+        ch45=st.session_state.get('include_ch4_ch5', False),
+    )
 
     # =========================================================================
     # APPLY FILTERS
