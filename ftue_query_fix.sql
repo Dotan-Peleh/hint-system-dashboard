@@ -491,6 +491,61 @@ funnel_flags AS (
   GROUP BY ue.distinct_id, ue.install_date, ue.install_hour, ue.install_week, ue.install_month, ue.install_version, ue.platform, ue.country, ue.is_low_payers_country, ue.mediasource
 ),
 
+-- Enforce monotonic funnel: a user can only pass step N if they passed all prior steps.
+-- Since flags are 0/1, multiplying by all prior steps ensures this.
+monotonic_flags AS (
+  SELECT
+    distinct_id, install_date, install_hour, install_week, install_month, install_version,
+    platform, country, is_low_payers_country, mediasource,
+    step_01,
+    step_02 * step_01 AS step_02,
+    step_03 * step_02 * step_01 AS step_03,
+    step_04 * step_03 * step_02 * step_01 AS step_04,
+    step_05 * step_04 * step_03 * step_02 * step_01 AS step_05,
+    step_06 * step_05 * step_04 * step_03 * step_02 * step_01 AS step_06,
+    step_07 * step_06 * step_05 * step_04 * step_03 * step_02 * step_01 AS step_07,
+    step_08 * step_07 * step_06 * step_05 * step_04 * step_03 * step_02 * step_01 AS step_08,
+    step_09 * step_08 * step_07 * step_06 * step_05 * step_04 * step_03 * step_02 * step_01 AS step_09,
+    step_10 * step_09 * step_08 * step_07 * step_06 * step_05 * step_04 * step_03 * step_02 * step_01 AS step_10,
+    step_11 * step_10 * step_09 * step_08 * step_07 * step_06 * step_05 * step_04 * step_03 * step_02 * step_01 AS step_11,
+    step_12 * step_11 * step_10 * step_09 * step_08 * step_07 * step_06 * step_05 * step_04 * step_03 * step_02 * step_01 AS step_12,
+    step_13 * step_12 * step_11 * step_10 * step_09 * step_08 * step_07 * step_06 * step_05 * step_04 * step_03 * step_02 * step_01 AS step_13,
+    step_14 * step_13 * step_12 * step_11 * step_10 * step_09 * step_08 * step_07 * step_06 * step_05 * step_04 * step_03 * step_02 * step_01 AS step_14,
+    step_15 * step_14 * step_13 * step_12 * step_11 * step_10 * step_09 * step_08 * step_07 * step_06 * step_05 * step_04 * step_03 * step_02 * step_01 AS step_15,
+    step_16 * step_15 * step_14 * step_13 * step_12 * step_11 * step_10 * step_09 * step_08 * step_07 * step_06 * step_05 * step_04 * step_03 * step_02 * step_01 AS step_16,
+    step_17 * step_16 * step_15 * step_14 * step_13 * step_12 * step_11 * step_10 * step_09 * step_08 * step_07 * step_06 * step_05 * step_04 * step_03 * step_02 * step_01 AS step_17,
+    step_18 * step_17 * step_16 * step_15 * step_14 * step_13 * step_12 * step_11 * step_10 * step_09 * step_08 * step_07 * step_06 * step_05 * step_04 * step_03 * step_02 * step_01 AS step_18,
+    step_19 * step_18 * step_17 * step_16 * step_15 * step_14 * step_13 * step_12 * step_11 * step_10 * step_09 * step_08 * step_07 * step_06 * step_05 * step_04 * step_03 * step_02 * step_01 AS step_19,
+    step_20 * step_19 * step_18 * step_17 * step_16 * step_15 * step_14 * step_13 * step_12 * step_11 * step_10 * step_09 * step_08 * step_07 * step_06 * step_05 * step_04 * step_03 * step_02 * step_01 AS step_20,
+    step_21 * step_20 * step_19 * step_18 * step_17 * step_16 * step_15 * step_14 * step_13 * step_12 * step_11 * step_10 * step_09 * step_08 * step_07 * step_06 * step_05 * step_04 * step_03 * step_02 * step_01 AS step_21,
+    step_22 * step_21 * step_20 * step_19 * step_18 * step_17 * step_16 * step_15 * step_14 * step_13 * step_12 * step_11 * step_10 * step_09 * step_08 * step_07 * step_06 * step_05 * step_04 * step_03 * step_02 * step_01 AS step_22,
+    step_23 * step_22 * step_21 * step_20 * step_19 * step_18 * step_17 * step_16 * step_15 * step_14 * step_13 * step_12 * step_11 * step_10 * step_09 * step_08 * step_07 * step_06 * step_05 * step_04 * step_03 * step_02 * step_01 AS step_23,
+    step_24 * step_23 * step_22 * step_21 * step_20 * step_19 * step_18 * step_17 * step_16 * step_15 * step_14 * step_13 * step_12 * step_11 * step_10 * step_09 * step_08 * step_07 * step_06 * step_05 * step_04 * step_03 * step_02 * step_01 AS step_24,
+    step_25 * step_24 * step_23 * step_22 * step_21 * step_20 * step_19 * step_18 * step_17 * step_16 * step_15 * step_14 * step_13 * step_12 * step_11 * step_10 * step_09 * step_08 * step_07 * step_06 * step_05 * step_04 * step_03 * step_02 * step_01 AS step_25,
+    step_26 * step_25 * step_24 * step_23 * step_22 * step_21 * step_20 * step_19 * step_18 * step_17 * step_16 * step_15 * step_14 * step_13 * step_12 * step_11 * step_10 * step_09 * step_08 * step_07 * step_06 * step_05 * step_04 * step_03 * step_02 * step_01 AS step_26,
+    step_27 * step_26 * step_25 * step_24 * step_23 * step_22 * step_21 * step_20 * step_19 * step_18 * step_17 * step_16 * step_15 * step_14 * step_13 * step_12 * step_11 * step_10 * step_09 * step_08 * step_07 * step_06 * step_05 * step_04 * step_03 * step_02 * step_01 AS step_27,
+    step_28 * step_27 * step_26 * step_25 * step_24 * step_23 * step_22 * step_21 * step_20 * step_19 * step_18 * step_17 * step_16 * step_15 * step_14 * step_13 * step_12 * step_11 * step_10 * step_09 * step_08 * step_07 * step_06 * step_05 * step_04 * step_03 * step_02 * step_01 AS step_28,
+    step_29 * step_28 * step_27 * step_26 * step_25 * step_24 * step_23 * step_22 * step_21 * step_20 * step_19 * step_18 * step_17 * step_16 * step_15 * step_14 * step_13 * step_12 * step_11 * step_10 * step_09 * step_08 * step_07 * step_06 * step_05 * step_04 * step_03 * step_02 * step_01 AS step_29,
+    step_30 * step_29 * step_28 * step_27 * step_26 * step_25 * step_24 * step_23 * step_22 * step_21 * step_20 * step_19 * step_18 * step_17 * step_16 * step_15 * step_14 * step_13 * step_12 * step_11 * step_10 * step_09 * step_08 * step_07 * step_06 * step_05 * step_04 * step_03 * step_02 * step_01 AS step_30,
+    step_31 * step_30 * step_29 * step_28 * step_27 * step_26 * step_25 * step_24 * step_23 * step_22 * step_21 * step_20 * step_19 * step_18 * step_17 * step_16 * step_15 * step_14 * step_13 * step_12 * step_11 * step_10 * step_09 * step_08 * step_07 * step_06 * step_05 * step_04 * step_03 * step_02 * step_01 AS step_31,
+    step_32 * step_31 * step_30 * step_29 * step_28 * step_27 * step_26 * step_25 * step_24 * step_23 * step_22 * step_21 * step_20 * step_19 * step_18 * step_17 * step_16 * step_15 * step_14 * step_13 * step_12 * step_11 * step_10 * step_09 * step_08 * step_07 * step_06 * step_05 * step_04 * step_03 * step_02 * step_01 AS step_32,
+    step_33 * step_32 * step_31 * step_30 * step_29 * step_28 * step_27 * step_26 * step_25 * step_24 * step_23 * step_22 * step_21 * step_20 * step_19 * step_18 * step_17 * step_16 * step_15 * step_14 * step_13 * step_12 * step_11 * step_10 * step_09 * step_08 * step_07 * step_06 * step_05 * step_04 * step_03 * step_02 * step_01 AS step_33,
+    step_34 * step_33 * step_32 * step_31 * step_30 * step_29 * step_28 * step_27 * step_26 * step_25 * step_24 * step_23 * step_22 * step_21 * step_20 * step_19 * step_18 * step_17 * step_16 * step_15 * step_14 * step_13 * step_12 * step_11 * step_10 * step_09 * step_08 * step_07 * step_06 * step_05 * step_04 * step_03 * step_02 * step_01 AS step_34,
+    step_35 * step_34 * step_33 * step_32 * step_31 * step_30 * step_29 * step_28 * step_27 * step_26 * step_25 * step_24 * step_23 * step_22 * step_21 * step_20 * step_19 * step_18 * step_17 * step_16 * step_15 * step_14 * step_13 * step_12 * step_11 * step_10 * step_09 * step_08 * step_07 * step_06 * step_05 * step_04 * step_03 * step_02 * step_01 AS step_35,
+    step_36 * step_35 * step_34 * step_33 * step_32 * step_31 * step_30 * step_29 * step_28 * step_27 * step_26 * step_25 * step_24 * step_23 * step_22 * step_21 * step_20 * step_19 * step_18 * step_17 * step_16 * step_15 * step_14 * step_13 * step_12 * step_11 * step_10 * step_09 * step_08 * step_07 * step_06 * step_05 * step_04 * step_03 * step_02 * step_01 AS step_36,
+    step_37 * step_36 * step_35 * step_34 * step_33 * step_32 * step_31 * step_30 * step_29 * step_28 * step_27 * step_26 * step_25 * step_24 * step_23 * step_22 * step_21 * step_20 * step_19 * step_18 * step_17 * step_16 * step_15 * step_14 * step_13 * step_12 * step_11 * step_10 * step_09 * step_08 * step_07 * step_06 * step_05 * step_04 * step_03 * step_02 * step_01 AS step_37,
+    step_38 * step_37 * step_36 * step_35 * step_34 * step_33 * step_32 * step_31 * step_30 * step_29 * step_28 * step_27 * step_26 * step_25 * step_24 * step_23 * step_22 * step_21 * step_20 * step_19 * step_18 * step_17 * step_16 * step_15 * step_14 * step_13 * step_12 * step_11 * step_10 * step_09 * step_08 * step_07 * step_06 * step_05 * step_04 * step_03 * step_02 * step_01 AS step_38,
+    step_39 * step_38 * step_37 * step_36 * step_35 * step_34 * step_33 * step_32 * step_31 * step_30 * step_29 * step_28 * step_27 * step_26 * step_25 * step_24 * step_23 * step_22 * step_21 * step_20 * step_19 * step_18 * step_17 * step_16 * step_15 * step_14 * step_13 * step_12 * step_11 * step_10 * step_09 * step_08 * step_07 * step_06 * step_05 * step_04 * step_03 * step_02 * step_01 AS step_39,
+    step_40 * step_39 * step_38 * step_37 * step_36 * step_35 * step_34 * step_33 * step_32 * step_31 * step_30 * step_29 * step_28 * step_27 * step_26 * step_25 * step_24 * step_23 * step_22 * step_21 * step_20 * step_19 * step_18 * step_17 * step_16 * step_15 * step_14 * step_13 * step_12 * step_11 * step_10 * step_09 * step_08 * step_07 * step_06 * step_05 * step_04 * step_03 * step_02 * step_01 AS step_40,
+    step_41 * step_40 * step_39 * step_38 * step_37 * step_36 * step_35 * step_34 * step_33 * step_32 * step_31 * step_30 * step_29 * step_28 * step_27 * step_26 * step_25 * step_24 * step_23 * step_22 * step_21 * step_20 * step_19 * step_18 * step_17 * step_16 * step_15 * step_14 * step_13 * step_12 * step_11 * step_10 * step_09 * step_08 * step_07 * step_06 * step_05 * step_04 * step_03 * step_02 * step_01 AS step_41,
+    step_42 * step_41 * step_40 * step_39 * step_38 * step_37 * step_36 * step_35 * step_34 * step_33 * step_32 * step_31 * step_30 * step_29 * step_28 * step_27 * step_26 * step_25 * step_24 * step_23 * step_22 * step_21 * step_20 * step_19 * step_18 * step_17 * step_16 * step_15 * step_14 * step_13 * step_12 * step_11 * step_10 * step_09 * step_08 * step_07 * step_06 * step_05 * step_04 * step_03 * step_02 * step_01 AS step_42,
+    step_43 * step_42 * step_41 * step_40 * step_39 * step_38 * step_37 * step_36 * step_35 * step_34 * step_33 * step_32 * step_31 * step_30 * step_29 * step_28 * step_27 * step_26 * step_25 * step_24 * step_23 * step_22 * step_21 * step_20 * step_19 * step_18 * step_17 * step_16 * step_15 * step_14 * step_13 * step_12 * step_11 * step_10 * step_09 * step_08 * step_07 * step_06 * step_05 * step_04 * step_03 * step_02 * step_01 AS step_43,
+    step_44 * step_43 * step_42 * step_41 * step_40 * step_39 * step_38 * step_37 * step_36 * step_35 * step_34 * step_33 * step_32 * step_31 * step_30 * step_29 * step_28 * step_27 * step_26 * step_25 * step_24 * step_23 * step_22 * step_21 * step_20 * step_19 * step_18 * step_17 * step_16 * step_15 * step_14 * step_13 * step_12 * step_11 * step_10 * step_09 * step_08 * step_07 * step_06 * step_05 * step_04 * step_03 * step_02 * step_01 AS step_44,
+    step_45 * step_44 * step_43 * step_42 * step_41 * step_40 * step_39 * step_38 * step_37 * step_36 * step_35 * step_34 * step_33 * step_32 * step_31 * step_30 * step_29 * step_28 * step_27 * step_26 * step_25 * step_24 * step_23 * step_22 * step_21 * step_20 * step_19 * step_18 * step_17 * step_16 * step_15 * step_14 * step_13 * step_12 * step_11 * step_10 * step_09 * step_08 * step_07 * step_06 * step_05 * step_04 * step_03 * step_02 * step_01 AS step_45,
+    step_46 * step_45 * step_44 * step_43 * step_42 * step_41 * step_40 * step_39 * step_38 * step_37 * step_36 * step_35 * step_34 * step_33 * step_32 * step_31 * step_30 * step_29 * step_28 * step_27 * step_26 * step_25 * step_24 * step_23 * step_22 * step_21 * step_20 * step_19 * step_18 * step_17 * step_16 * step_15 * step_14 * step_13 * step_12 * step_11 * step_10 * step_09 * step_08 * step_07 * step_06 * step_05 * step_04 * step_03 * step_02 * step_01 AS step_46
+  FROM funnel_flags
+),
+
 -- Aggregate funnel metrics by all dimensions
 version_aggregates AS (
   SELECT
@@ -520,7 +575,7 @@ version_aggregates AS (
     SUM(step_40) AS step_40, SUM(step_41) AS step_41, SUM(step_42) AS step_42,
     SUM(step_43) AS step_43, SUM(step_44) AS step_44, SUM(step_45) AS step_45,
     SUM(step_46) AS step_46
-  FROM funnel_flags
+  FROM monotonic_flags
   GROUP BY install_date, install_hour, install_week, install_month, install_version, platform, country, is_low_payers_country, mediasource
 )
 
