@@ -220,11 +220,19 @@ def load_retention_data(_client, start_date, end_date):
 # HELPERS
 # =============================================================================
 
+CH4_CH5_SUFFIXES = ('_47_new_chapter_4', '_48_new_chapter_5', '_47_to_46', '_48_to_47')
+
 def get_pct_columns(df):
-    return sorted([c for c in df.columns if c.startswith('pct_')])
+    cols = sorted([c for c in df.columns if c.startswith('pct_')])
+    if not st.session_state.get('include_ch4_ch5', False):
+        cols = [c for c in cols if not c.endswith(CH4_CH5_SUFFIXES)]
+    return cols
 
 def get_ratio_columns(df):
-    return sorted([c for c in df.columns if c.startswith('ratio_')])
+    cols = sorted([c for c in df.columns if c.startswith('ratio_')])
+    if not st.session_state.get('include_ch4_ch5', False):
+        cols = [c for c in cols if not c.endswith(CH4_CH5_SUFFIXES)]
+    return cols
 
 def format_step_label(col):
     parts = col.split('_', 2)
@@ -470,6 +478,9 @@ def main():
             lp_map = dict(zip(lp_labels, lp_opts))
             sel_lp = st.selectbox("Is Low Payers", ["All"] + lp_labels, index=0)
             selected_low_payers = lp_map[sel_lp] if sel_lp != "All" else None
+
+        st.markdown("---")
+        include_ch4_ch5 = st.checkbox("Include Chapter 4 & 5 steps", value=False, key="include_ch4_ch5")
 
         st.markdown("---")
         st.markdown("### Retention Filters")
