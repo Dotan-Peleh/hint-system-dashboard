@@ -484,7 +484,17 @@ funnel_flags AS (
           AND a.ts_how_to_play IS NOT NULL
           AND a.ts_flow3_step8_ch2 IS NOT NULL AND ue.res_timestamp >= a.ts_flow3_step8_ch2
           AND (ue.res_timestamp - a.ts_flow3_step8_ch2) / 60000 <= 30
-          THEN 1 ELSE 0 END) AS step_46
+          THEN 1 ELSE 0 END) AS step_46,
+
+    -- Step 47: scapes_tasks_new_chapter ch4 (user reaches chapter 4)
+    MAX(CASE WHEN ue.mp_event_name = 'scapes_tasks_new_chapter' AND ue.chapter = 4
+          AND a.ts_how_to_play IS NOT NULL
+          THEN 1 ELSE 0 END) AS step_47,
+
+    -- Step 48: scapes_tasks_new_chapter ch5 (user reaches chapter 5)
+    MAX(CASE WHEN ue.mp_event_name = 'scapes_tasks_new_chapter' AND ue.chapter = 5
+          AND a.ts_how_to_play IS NOT NULL
+          THEN 1 ELSE 0 END) AS step_48
 
   FROM user_events ue
   LEFT JOIN ftue_anchors a ON ue.distinct_id = a.distinct_id
@@ -542,7 +552,9 @@ monotonic_flags AS (
     step_43 * step_42 * step_41 * step_40 * step_39 * step_38 * step_37 * step_36 * step_35 * step_34 * step_33 * step_32 * step_31 * step_30 * step_29 * step_28 * step_27 * step_26 * step_25 * step_24 * step_23 * step_22 * step_21 * step_20 * step_19 * step_18 * step_17 * step_16 * step_15 * step_14 * step_13 * step_12 * step_11 * step_10 * step_09 * step_08 * step_07 * step_06 * step_05 * step_04 * step_03 * step_02 * step_01 AS step_43,
     step_44 * step_43 * step_42 * step_41 * step_40 * step_39 * step_38 * step_37 * step_36 * step_35 * step_34 * step_33 * step_32 * step_31 * step_30 * step_29 * step_28 * step_27 * step_26 * step_25 * step_24 * step_23 * step_22 * step_21 * step_20 * step_19 * step_18 * step_17 * step_16 * step_15 * step_14 * step_13 * step_12 * step_11 * step_10 * step_09 * step_08 * step_07 * step_06 * step_05 * step_04 * step_03 * step_02 * step_01 AS step_44,
     step_45 * step_44 * step_43 * step_42 * step_41 * step_40 * step_39 * step_38 * step_37 * step_36 * step_35 * step_34 * step_33 * step_32 * step_31 * step_30 * step_29 * step_28 * step_27 * step_26 * step_25 * step_24 * step_23 * step_22 * step_21 * step_20 * step_19 * step_18 * step_17 * step_16 * step_15 * step_14 * step_13 * step_12 * step_11 * step_10 * step_09 * step_08 * step_07 * step_06 * step_05 * step_04 * step_03 * step_02 * step_01 AS step_45,
-    step_46 * step_45 * step_44 * step_43 * step_42 * step_41 * step_40 * step_39 * step_38 * step_37 * step_36 * step_35 * step_34 * step_33 * step_32 * step_31 * step_30 * step_29 * step_28 * step_27 * step_26 * step_25 * step_24 * step_23 * step_22 * step_21 * step_20 * step_19 * step_18 * step_17 * step_16 * step_15 * step_14 * step_13 * step_12 * step_11 * step_10 * step_09 * step_08 * step_07 * step_06 * step_05 * step_04 * step_03 * step_02 * step_01 AS step_46
+    step_46 * step_45 * step_44 * step_43 * step_42 * step_41 * step_40 * step_39 * step_38 * step_37 * step_36 * step_35 * step_34 * step_33 * step_32 * step_31 * step_30 * step_29 * step_28 * step_27 * step_26 * step_25 * step_24 * step_23 * step_22 * step_21 * step_20 * step_19 * step_18 * step_17 * step_16 * step_15 * step_14 * step_13 * step_12 * step_11 * step_10 * step_09 * step_08 * step_07 * step_06 * step_05 * step_04 * step_03 * step_02 * step_01 AS step_46,
+    step_47 * step_46 * step_45 * step_44 * step_43 * step_42 * step_41 * step_40 * step_39 * step_38 * step_37 * step_36 * step_35 * step_34 * step_33 * step_32 * step_31 * step_30 * step_29 * step_28 * step_27 * step_26 * step_25 * step_24 * step_23 * step_22 * step_21 * step_20 * step_19 * step_18 * step_17 * step_16 * step_15 * step_14 * step_13 * step_12 * step_11 * step_10 * step_09 * step_08 * step_07 * step_06 * step_05 * step_04 * step_03 * step_02 * step_01 AS step_47,
+    step_48 * step_47 * step_46 * step_45 * step_44 * step_43 * step_42 * step_41 * step_40 * step_39 * step_38 * step_37 * step_36 * step_35 * step_34 * step_33 * step_32 * step_31 * step_30 * step_29 * step_28 * step_27 * step_26 * step_25 * step_24 * step_23 * step_22 * step_21 * step_20 * step_19 * step_18 * step_17 * step_16 * step_15 * step_14 * step_13 * step_12 * step_11 * step_10 * step_09 * step_08 * step_07 * step_06 * step_05 * step_04 * step_03 * step_02 * step_01 AS step_48
   FROM funnel_flags
 ),
 
@@ -574,7 +586,7 @@ version_aggregates AS (
     SUM(step_37) AS step_37, SUM(step_38) AS step_38, SUM(step_39) AS step_39,
     SUM(step_40) AS step_40, SUM(step_41) AS step_41, SUM(step_42) AS step_42,
     SUM(step_43) AS step_43, SUM(step_44) AS step_44, SUM(step_45) AS step_45,
-    SUM(step_46) AS step_46
+    SUM(step_46) AS step_46, SUM(step_47) AS step_47, SUM(step_48) AS step_48
   FROM monotonic_flags
   GROUP BY install_date, install_hour, install_week, install_month, install_version, platform, country, is_low_payers_country, mediasource
 )
@@ -632,6 +644,8 @@ SELECT
   ROUND(step_44 / NULLIF(step_01, 0), 4) AS pct_44_ftue_flow12_step4,
   ROUND(step_45 / NULLIF(step_01, 0), 4) AS pct_45_new_chapter_3,
   ROUND(step_46 / NULLIF(step_01, 0), 4) AS pct_46_click_harvest_collect_ch3,
+  ROUND(step_47 / NULLIF(step_01, 0), 4) AS pct_47_new_chapter_4,
+  ROUND(step_48 / NULLIF(step_01, 0), 4) AS pct_48_new_chapter_5,
 
   -- Step-to-step conversion rates
   1.0 AS ratio_01_to_prev,
@@ -679,7 +693,9 @@ SELECT
   ROUND(step_43 / NULLIF(step_42, 0), 4) AS ratio_43_to_42,
   ROUND(step_44 / NULLIF(step_43, 0), 4) AS ratio_44_to_43,
   ROUND(step_45 / NULLIF(step_44, 0), 4) AS ratio_45_to_44,
-  ROUND(step_46 / NULLIF(step_45, 0), 4) AS ratio_46_to_45
+  ROUND(step_46 / NULLIF(step_45, 0), 4) AS ratio_46_to_45,
+  ROUND(step_47 / NULLIF(step_46, 0), 4) AS ratio_47_to_46,
+  ROUND(step_48 / NULLIF(step_47, 0), 4) AS ratio_48_to_47
 
 FROM version_aggregates v
 LEFT JOIN media_type_mapping m ON v.mediasource = m.mediasource

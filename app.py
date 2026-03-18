@@ -1222,6 +1222,8 @@ def main():
                     {"Step": "44: ftue_flow12_step4", "Event": "impression_ftue_flow12_step4", "Description": "FTUE Flow 12 step 4 — hint system completion"},
                     {"Step": "45: new_chapter_3", "Event": "scapes_tasks_new_chapter", "Description": "User reaches chapter 3"},
                     {"Step": "46: click_harvest_collect_ch3", "Event": "click_harvest_collect", "Description": "User collects harvest reward (chapter 3)"},
+                    {"Step": "47: new_chapter_4", "Event": "scapes_tasks_new_chapter", "Description": "User reaches chapter 4"},
+                    {"Step": "48: new_chapter_5", "Event": "scapes_tasks_new_chapter", "Description": "User reaches chapter 5"},
                 ]
                 st.dataframe(pd.DataFrame(step_reference), use_container_width=True, hide_index=True, height=400)
 
