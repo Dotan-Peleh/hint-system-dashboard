@@ -838,11 +838,11 @@ def main():
             if avg_before and avg_after:
                 for i in range(len(avg_before)):
                     if avg_before[i] > 0:
-                        lift = (avg_after[i] - avg_before[i]) / avg_before[i] * 100
-                        ann_color = COLORS['after'] if lift > 0 else COLORS['negative']
+                        lift_pp = (avg_after[i] - avg_before[i]) * 100  # percentage points
+                        ann_color = COLORS['after'] if lift_pp > 0 else COLORS['negative']
                         fig_ba.add_annotation(
                             x=active_labels[i], y=max(avg_before[i], avg_after[i]),
-                            text=f"<b>{lift:+.1f}%</b>", showarrow=False,
+                            text=f"<b>{lift_pp:+.1f}pp</b>", showarrow=False,
                             yshift=14, font=dict(size=9, color=ann_color),
                             bgcolor='rgba(255,255,255,0.8)', borderpad=2,
                         )
@@ -885,42 +885,42 @@ def main():
 
             # --- Summary metrics ---
             if avg_before and avg_after:
-                lifts_all = [(avg_after[i] - avg_before[i]) / avg_before[i] * 100 if avg_before[i] > 0 else 0 for i in range(len(avg_before))]
+                lifts_all = [(avg_after[i] - avg_before[i]) * 100 for i in range(len(avg_before))]
                 improved = [l for l in lifts_all if l > 0.5]
                 declined = [l for l in lifts_all if l < -0.5]
                 c1, c2, c3, c4 = st.columns(4)
-                c1.metric("Avg Lift", f"{np.mean(lifts_all):+.1f}%")
+                c1.metric("Avg Lift", f"{np.mean(lifts_all):+.1f}pp")
                 c2.metric("Steps Improved", f"{len(improved)}/{len(lifts_all)}")
                 c3.metric("Steps Declined", f"{len(declined)}/{len(lifts_all)}")
-                c4.metric("Last Step Lift", f"{lifts_all[-1]:+.1f}%")
+                c4.metric("Last Step Lift", f"{lifts_all[-1]:+.1f}pp")
 
             # --- LIFT DELTA CHART: % difference per step ---
             if avg_before and avg_after:
-                st.markdown("#### Lift % per Step (After vs Before)")
+                st.markdown("#### Lift (pp) per Step (After vs Before)")
                 st.markdown('<div class="legend-box">'
                             '<strong style="color:#2ECB71">Green bars</strong> = After is higher (improvement) &nbsp;&nbsp;'
                             '<strong style="color:#E74C3C">Red bars</strong> = After is lower (regression) &nbsp;&nbsp;'
                             'The <b>dashed line</b> shows the average lift across all steps.'
                             '</div>', unsafe_allow_html=True)
-                lifts_per_step = [(avg_after[i] - avg_before[i]) / avg_before[i] * 100 if avg_before[i] > 0 else 0 for i in range(len(avg_before))]
+                lifts_per_step = [(avg_after[i] - avg_before[i]) * 100 for i in range(len(avg_before))]
                 bar_colors = [COLORS['after'] if l > 0.1 else COLORS['negative'] if l < -0.1 else COLORS['neutral'] for l in lifts_per_step]
                 fig_lift = go.Figure()
                 fig_lift.add_trace(go.Bar(
                     x=active_labels, y=lifts_per_step,
                     marker_color=bar_colors,
-                    hovertemplate='<b>%{x}</b><br>Lift: %{y:+.1f}%<extra></extra>',
-                    text=[f"{l:+.1f}%" for l in lifts_per_step],
+                    hovertemplate='<b>%{x}</b><br>Lift: %{y:+.1f}pp<extra></extra>',
+                    text=[f"{l:+.1f}pp" for l in lifts_per_step],
                     textposition='outside', textfont=dict(size=9),
                 ))
                 avg_lift_val = np.mean(lifts_per_step)
                 fig_lift.add_hline(y=0, line_color="#2C3E50", line_width=1.5)
                 fig_lift.add_hline(y=avg_lift_val, line_dash="dash", line_color=COLORS['accent'], line_width=2,
-                    annotation_text=f"Avg: {avg_lift_val:+.1f}%", annotation_position="top right",
+                    annotation_text=f"Avg: {avg_lift_val:+.1f}pp", annotation_position="top right",
                     annotation_font=dict(size=12, color=COLORS['accent']))
                 apply_chart_theme(fig_lift,
-                    title=dict(text="Lift % at Each Step"),
-                    xaxis_title="FTUE Steps", yaxis_title="Lift %",
-                    yaxis_ticksuffix="%", height=450,
+                    title=dict(text="Lift (pp) at Each Step"),
+                    xaxis_title="FTUE Steps", yaxis_title="Lift (pp)",
+                    yaxis_ticksuffix="pp", height=450,
                     xaxis_tickangle=-45, xaxis=dict(tickfont=dict(size=8)),
                     margin=dict(b=150, t=60),
                 )
@@ -934,13 +934,13 @@ def main():
                 row['Before'] = f"{avg_before[i]:.4f}" if avg_before else '-'
                 row['After'] = f"{avg_after[i]:.4f}" if avg_after else '-'
                 if avg_before and avg_after and avg_before[i] > 0:
-                    lift = (avg_after[i] - avg_before[i]) / avg_before[i] * 100
+                    lift_pp = (avg_after[i] - avg_before[i]) * 100
                     delta_abs = avg_after[i] - avg_before[i]
                     row['Delta'] = f"{delta_abs:+.4f}"
-                    row['Lift %'] = f"{lift:+.1f}%"
+                    row['Lift (pp)'] = f"{lift_pp:+.1f}pp"
                 else:
                     row['Delta'] = '-'
-                    row['Lift %'] = '-'
+                    row['Lift (pp)'] = '-'
                 detail_rows.append(row)
             st.dataframe(pd.DataFrame(detail_rows), use_container_width=True, hide_index=True, height=500)
 
