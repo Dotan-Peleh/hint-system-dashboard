@@ -970,13 +970,20 @@ def main():
             if ba_sel_lp != "All":
                 ba_params['ba_lp'] = ba_sel_lp
             share_qs = '&'.join(f'{k}={v}' for k, v in ba_params.items())
-            share_url = f"?{share_qs}"
-            st.markdown(
-                f'<a href="{share_url}" target="_self" style="display:inline-block;margin-top:28px;padding:4px 12px;'
-                f'background:#5B8DEF;color:white;border-radius:6px;text-decoration:none;font-size:13px;">'
-                f'Copy Share Link</a>',
-                unsafe_allow_html=True
+            share_url_qs = f"?{share_qs}"
+            # Use JS to build full URL from current origin and copy to clipboard
+            copy_js = (
+                f'<button onclick="'
+                f"var url = window.location.origin + window.location.pathname + '{share_url_qs}';"
+                f"navigator.clipboard.writeText(url).then(function(){{"
+                f"var el=document.getElementById('ba_copy_msg');el.textContent='Copied!';el.style.display='inline';"
+                f"setTimeout(function(){{el.style.display='none'}},2000)"
+                f"}});"
+                f'" style="margin-top:28px;padding:4px 12px;background:#5B8DEF;color:white;border-radius:6px;'
+                f'border:none;cursor:pointer;font-size:13px;">Copy Share Link</button>'
+                f'<span id="ba_copy_msg" style="display:none;margin-left:8px;color:#2ECB71;font-size:12px;">Copied!</span>'
             )
+            st.markdown(copy_js, unsafe_allow_html=True)
 
         has_ftue = not fdf_ba.empty
         has_ret = not rdf_ba.empty
