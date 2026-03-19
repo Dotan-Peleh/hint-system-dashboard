@@ -954,7 +954,7 @@ def main():
                 st.markdown(ver_counts)
 
         # --- Options ---
-        opt1, opt2, opt3, opt4 = st.columns([2, 1, 1, 1])
+        opt1, opt2, opt3 = st.columns([2, 1, 1])
         with opt1:
             ba_metric_options = ["Conversion vs Step 1"]
             ratio_cols_ba = get_ratio_columns(fdf_ba) if not fdf_ba.empty else []
@@ -963,10 +963,8 @@ def main():
             url_ba_metric_idx = 1 if url_params.get('ba_metric') == 'ratio' and len(ba_metric_options) > 1 else 0
             ba_metric_set = st.selectbox("Metric set", ba_metric_options, index=url_ba_metric_idx, key="ba_metric_set")
         with opt2:
-            show_avg = st.checkbox("Show Average", value=url_params.get('ba_avg', True), key="ba_show_avg")
-        with opt3:
             st.checkbox("Include Ch 4 & 5", value=url_params.get('ch45', False), key="include_ch4_ch5")
-        with opt4:
+        with opt3:
             # Build share URL with all BA filters
             ba_params = {}
             ba_params['tab'] = 'ba'
@@ -982,8 +980,6 @@ def main():
             ba_params['after_eh'] = str(after_end_hour)
             if ba_metric_set != "Conversion vs Step 1":
                 ba_params['ba_metric'] = 'ratio'
-            if not show_avg:
-                ba_params['ba_avg'] = '0'
             if st.session_state.get('include_ch4_ch5', False):
                 ba_params['ch45'] = '1'
             if ba_selected_platforms and ba_plat_opts and set(ba_selected_platforms) != set(ba_plat_opts):
@@ -1034,7 +1030,6 @@ def main():
                 group_all_vals = []
                 group_all_users = []
                 for ver in sorted(versions, key=version_sort_key):
-                    ver_color = color_map.get(str(ver), '#333')
                     vdf = fdf_ba[fdf_ba['install_version_str'] == str(ver)]
                     vdf = ba_filter_date_hour(vdf, date_start, date_end, start_h, end_h)
                     vals, users = calc_weighted_steps(vdf, active_metrics)
@@ -1042,43 +1037,30 @@ def main():
                         continue
                     group_all_vals.append(vals)
                     group_all_users.append(users)
-                    # Individual version line
-                    line_opacity = 0.45 if show_avg else 0.9
-                    line_width = 1.5 if show_avg else 2.5
-                    fig_ba.add_trace(go.Scatter(
-                        x=active_labels, y=vals,
-                        mode='lines+markers',
-                        name=f"v{ver} {period_label} ({users:,.0f})",
-                        line=dict(color=ver_color, width=line_width,
-                                  dash='solid' if period_label == 'Before' else 'dot'),
-                        marker=dict(size=4 if show_avg else 6,
-                                    symbol='circle' if period_label == 'Before' else 'diamond'),
-                        opacity=line_opacity,
-                        hovertemplate='<b>%{x}</b><br>v' + str(ver) + f' {period_label} ({users:,.0f})' + ': %{y:.4f}<extra></extra>',
-                        legendgroup=period_label,
-                    ))
-                # Weighted average line
-                if group_all_vals and show_avg:
-                    total_u = sum(group_all_users)
-                    avg_vals = [sum(group_all_vals[j][i] * group_all_users[j] for j in range(len(group_all_vals))) / total_u
+                if not group_all_vals:
+                    return None, 0
+                total_u = sum(group_all_users)
+                # Single version: use its values directly; multiple: weighted average
+                if len(group_all_vals) == 1:
+                    agg_vals = group_all_vals[0]
+                    ver_label = f"v{sorted(versions, key=version_sort_key)[0]}"
+                else:
+                    agg_vals = [sum(group_all_vals[j][i] * group_all_users[j] for j in range(len(group_all_vals))) / total_u
                                 for i in range(len(active_labels))]
-                    fig_ba.add_trace(go.Scatter(
-                        x=active_labels, y=avg_vals,
-                        mode='lines+markers',
-                        name=f"AVG {period_label} ({total_u:,.0f})",
-                        line=dict(color=base_color, width=3.5, dash=dash_avg),
-                        marker=dict(size=8, symbol='circle' if period_label == 'Before' else 'diamond',
-                                    line=dict(width=2, color='white')),
-                        hovertemplate='<b>%{x}</b><br>AVG ' + period_label + f' ({total_u:,.0f})' + ': %{y:.4f}<extra></extra>',
-                        legendgroup=period_label + '_avg',
-                    ))
-                    return avg_vals, total_u
-                elif group_all_vals:
-                    total_u = sum(group_all_users)
-                    avg_vals = [sum(group_all_vals[j][i] * group_all_users[j] for j in range(len(group_all_vals))) / total_u
-                                for i in range(len(active_labels))]
-                    return avg_vals, total_u
-                return None, 0
+                    ver_label = f"{len(group_all_vals)} versions"
+                # Plot single aggregated line per group
+                fig_ba.add_trace(go.Scatter(
+                    x=active_labels, y=agg_vals,
+                    mode='lines+markers',
+                    name=f"{period_label} ({ver_label}, {total_u:,.0f})",
+                    line=dict(color=base_color, width=3,
+                              dash='solid' if period_label == 'Before' else 'dot'),
+                    marker=dict(size=7, symbol='circle' if period_label == 'Before' else 'diamond',
+                                line=dict(width=1.5, color='white')),
+                    hovertemplate='<b>%{x}</b><br>' + period_label + f' ({ver_label}, {total_u:,.0f})' + ': %{y:.4f}<extra></extra>',
+                    legendgroup=period_label,
+                ))
+                return agg_vals, total_u
 
             avg_before, users_before = plot_group(before_versions, before_start, before_end, before_start_hour, before_end_hour, "Before", COLORS['before'], 'solid')
             avg_after, users_after = plot_group(after_versions, after_start, after_end, after_start_hour, after_end_hour, "After", COLORS['after'], 'dash')
