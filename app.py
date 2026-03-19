@@ -15,7 +15,7 @@ BQ_PROJECT = "yotam-395120"
 FTUE_TABLE = f"{BQ_PROJECT}.peerplay.ftue_dashboard_fixed"
 RETENTION_TABLE = f"{BQ_PROJECT}.peerplay.hint_system_ab_test_results"
 
-TEST_START_DATE = date(2026, 3, 17)
+TEST_START_DATE = date(2026, 3, 16)
 TEST_START_HOUR = 17  # 5:00 PM UTC
 DEFAULT_VERSION = '0.3811'
 
@@ -391,6 +391,10 @@ def parse_url_params():
         params['before_ver'] = _csv_param(qp, 'before_ver')
     if 'after_ver' in qp:
         params['after_ver'] = _csv_param(qp, 'after_ver')
+    if 'before_min_ver' in qp:
+        params['before_min_ver'] = qp['before_min_ver']
+    if 'after_min_ver' in qp:
+        params['after_min_ver'] = qp['after_min_ver']
     for prefix in ('before', 'after'):
         for suffix, parser in [('sd', date.fromisoformat), ('ed', date.fromisoformat), ('sh', int), ('eh', int)]:
             key = f'{prefix}_{suffix}'
@@ -848,11 +852,6 @@ def main():
         ba_all_dates = sorted(fdf_ba['install_date'].dropna().unique().tolist()) if not fdf_ba.empty and 'install_date' in fdf_ba.columns else []
         ba_min_date = min(ba_all_dates) if ba_all_dates else date(2026, 2, 1)
         ba_max_date = max(ba_all_dates) if ba_all_dates else date.today()
-        ba_versions_available = sorted(
-            set(list(fdf_ba['install_version_str'].unique()) if not fdf_ba.empty else []),
-            key=version_sort_key, reverse=True
-        )
-
         def ba_filter_date_hour(df, ds, de, sh=0, eh=23):
             """Filter dataframe by date range + hour boundaries."""
             out = df[(df['install_date'] >= ds) & (df['install_date'] <= de)]
@@ -868,23 +867,35 @@ def main():
             vdf = ba_filter_date_hour(vdf, ds, de, sh, eh)
             return int(vdf['total_users'].sum()) if 'total_users' in vdf.columns else len(vdf)
 
-        # Default version for Before/After (from URL or fallback to DEFAULT_VERSION)
-        url_before_ver = url_params.get('before_ver')
-        url_after_ver = url_params.get('after_ver')
-        default_ba_ver = [v for v in ba_versions_available if v.startswith(DEFAULT_VERSION)]
-        if not default_ba_ver:
-            default_ba_ver = [ba_versions_available[0]] if ba_versions_available else []
+        # Versions sorted ascending for min-version logic
+        ba_versions_asc = sorted(
+            set(list(fdf_ba['install_version_str'].unique()) if not fdf_ba.empty else []),
+            key=version_sort_key
+        )
 
-        # Default platform: both iOS and Android
-        ba_default_plats = ba_selected_platforms  # from inline filters above
+        def versions_gte(min_ver, ver_list):
+            """Return all versions >= min_ver from ver_list (sorted ascending)."""
+            try:
+                min_val = float(min_ver)
+            except (ValueError, TypeError):
+                return ver_list
+            return [v for v in ver_list if version_sort_key(v) >= min_val]
+
+        # Default min version from URL or DEFAULT_VERSION
+        url_before_min = url_params.get('before_min_ver', DEFAULT_VERSION)
+        url_after_min = url_params.get('after_min_ver', DEFAULT_VERSION)
 
         col_before, col_vs, col_after = st.columns([5, 0.5, 5])
         with col_before:
             st.markdown(f'<div style="background:#EBF5FB;padding:10px 16px;border-radius:8px;border-left:4px solid {COLORS["before"]};margin-bottom:12px;">'
                         f'<b style="color:{COLORS["before"]};font-size:1.1em;">BEFORE</b></div>', unsafe_allow_html=True)
-            before_ver_default = [v for v in ba_versions_available if v in url_before_ver] if url_before_ver else default_ba_ver
-            before_versions = st.multiselect("Versions", ba_versions_available,
-                default=before_ver_default, key="ba_before_vers")
+            before_min_idx = 0
+            if url_before_min and ba_versions_asc:
+                matching = [i for i, v in enumerate(ba_versions_asc) if v == str(url_before_min)]
+                before_min_idx = matching[0] if matching else 0
+            before_min_ver = st.selectbox("Min Version (includes all above)", ba_versions_asc,
+                index=before_min_idx, key="ba_before_min_ver")
+            before_versions = versions_gte(before_min_ver, ba_versions_asc)
             bc1, bch1, bc2, bch2 = st.columns([2, 1, 2, 1])
             url_bsd = url_params.get('before_sd', ba_min_date)
             url_bsd = max(ba_min_date, min(ba_max_date, url_bsd)) if isinstance(url_bsd, date) else ba_min_date
@@ -899,15 +910,26 @@ def main():
             with bch2:
                 before_end_hour = st.number_input("Hour", min_value=0, max_value=23, value=url_params.get('before_eh', TEST_START_HOUR - 1 if TEST_START_HOUR > 0 else 23), key="ba_before_end_h")
             if before_versions:
-                st.markdown(" | ".join([f"v{v}: **{ba_installs(v, before_start, before_end, before_start_hour, before_end_hour):,}**" for v in before_versions]))
+                total_before_users = sum(ba_installs(v, before_start, before_end, before_start_hour, before_end_hour) for v in before_versions)
+                ver_counts = " | ".join([f"v{v}: **{ba_installs(v, before_start, before_end, before_start_hour, before_end_hour):,}**" for v in before_versions])
+                st.markdown(f'<div class="legend-box" style="font-size:0.82rem;padding:10px 14px;">'
+                            f'<b>Timeframe:</b> {before_start} {before_start_hour:02d}:00 — {before_end} {before_end_hour:02d}:00<br>'
+                            f'<b>Versions ({len(before_versions)}):</b> {", ".join(f"v{v}" for v in before_versions)}<br>'
+                            f'<b>Total users:</b> {total_before_users:,}'
+                            f'</div>', unsafe_allow_html=True)
+                st.markdown(ver_counts)
         with col_vs:
             st.markdown("<div style='text-align:center;padding-top:60px;font-size:1.8em;font-weight:bold;color:#7F8C8D;'>vs</div>", unsafe_allow_html=True)
         with col_after:
             st.markdown(f'<div style="background:#EAFAF1;padding:10px 16px;border-radius:8px;border-left:4px solid {COLORS["after"]};margin-bottom:12px;">'
                         f'<b style="color:{COLORS["after"]};font-size:1.1em;">AFTER</b></div>', unsafe_allow_html=True)
-            after_ver_default = [v for v in ba_versions_available if v in url_after_ver] if url_after_ver else default_ba_ver
-            after_versions = st.multiselect("Versions", ba_versions_available,
-                default=after_ver_default, key="ba_after_vers")
+            after_min_idx = 0
+            if url_after_min and ba_versions_asc:
+                matching = [i for i, v in enumerate(ba_versions_asc) if v == str(url_after_min)]
+                after_min_idx = matching[0] if matching else 0
+            after_min_ver = st.selectbox("Min Version (includes all above)", ba_versions_asc,
+                index=after_min_idx, key="ba_after_min_ver")
+            after_versions = versions_gte(after_min_ver, ba_versions_asc)
             ac1, ach1, ac2, ach2 = st.columns([2, 1, 2, 1])
             url_asd = url_params.get('after_sd', TEST_START_DATE if TEST_START_DATE <= ba_max_date else ba_min_date)
             url_asd = max(ba_min_date, min(ba_max_date, url_asd)) if isinstance(url_asd, date) else (TEST_START_DATE if TEST_START_DATE <= ba_max_date else ba_min_date)
@@ -922,7 +944,14 @@ def main():
             with ach2:
                 after_end_hour = st.number_input("Hour", min_value=0, max_value=23, value=url_params.get('after_eh', 23), key="ba_after_end_h")
             if after_versions:
-                st.markdown(" | ".join([f"v{v}: **{ba_installs(v, after_start, after_end, after_start_hour, after_end_hour):,}**" for v in after_versions]))
+                total_after_users = sum(ba_installs(v, after_start, after_end, after_start_hour, after_end_hour) for v in after_versions)
+                ver_counts = " | ".join([f"v{v}: **{ba_installs(v, after_start, after_end, after_start_hour, after_end_hour):,}**" for v in after_versions])
+                st.markdown(f'<div class="legend-box" style="font-size:0.82rem;padding:10px 14px;">'
+                            f'<b>Timeframe:</b> {after_start} {after_start_hour:02d}:00 — {after_end} {after_end_hour:02d}:00<br>'
+                            f'<b>Versions ({len(after_versions)}):</b> {", ".join(f"v{v}" for v in after_versions)}<br>'
+                            f'<b>Total users:</b> {total_after_users:,}'
+                            f'</div>', unsafe_allow_html=True)
+                st.markdown(ver_counts)
 
         # --- Options ---
         opt1, opt2, opt3, opt4 = st.columns([2, 1, 1, 1])
@@ -941,14 +970,12 @@ def main():
             # Build share URL with all BA filters
             ba_params = {}
             ba_params['tab'] = 'ba'
-            if before_versions:
-                ba_params['before_ver'] = ','.join(before_versions)
+            ba_params['before_min_ver'] = str(before_min_ver)
             ba_params['before_sd'] = str(before_start)
             ba_params['before_sh'] = str(before_start_hour)
             ba_params['before_ed'] = str(before_end)
             ba_params['before_eh'] = str(before_end_hour)
-            if after_versions:
-                ba_params['after_ver'] = ','.join(after_versions)
+            ba_params['after_min_ver'] = str(after_min_ver)
             ba_params['after_sd'] = str(after_start)
             ba_params['after_sh'] = str(after_start_hour)
             ba_params['after_ed'] = str(after_end)
