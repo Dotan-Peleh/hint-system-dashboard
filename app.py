@@ -897,11 +897,9 @@ def main():
                 index=before_min_idx, key="ba_before_min_ver")
             before_versions = versions_gte(before_min_ver, ba_versions_asc)
             bc1, bch1, bc2, bch2 = st.columns([2, 1, 2, 1])
-            # Default before: same window length as after (test_start → max_date), mirrored backwards
             from datetime import timedelta
-            default_before_end = TEST_START_DATE if TEST_START_DATE <= ba_max_date else ba_max_date
-            days_after = (ba_max_date - TEST_START_DATE).days if ba_max_date > TEST_START_DATE else 7
-            default_before_start = max(ba_min_date, TEST_START_DATE - timedelta(days=max(days_after, 1)))
+            default_before_start = max(ba_min_date, TEST_START_DATE - timedelta(days=6))
+            default_before_end = min(ba_max_date, TEST_START_DATE)
             url_bsd = url_params.get('before_sd', default_before_start)
             url_bsd = max(ba_min_date, min(ba_max_date, url_bsd)) if isinstance(url_bsd, date) else default_before_start
             url_bed = url_params.get('before_ed', default_before_end)
@@ -909,7 +907,7 @@ def main():
             with bc1:
                 before_start = st.date_input("Start", value=url_bsd, min_value=ba_min_date, max_value=ba_max_date, key="ba_before_start")
             with bch1:
-                before_start_hour = st.number_input("Hour", min_value=0, max_value=23, value=url_params.get('before_sh', TEST_START_HOUR), key="ba_before_start_h")
+                before_start_hour = st.number_input("Hour", min_value=0, max_value=23, value=url_params.get('before_sh', TEST_START_HOUR - 1 if TEST_START_HOUR > 0 else 23), key="ba_before_start_h")
             with bc2:
                 before_end = st.date_input("End", value=url_bed, min_value=ba_min_date, max_value=ba_max_date, key="ba_before_end")
             with bch2:
@@ -947,7 +945,7 @@ def main():
             with ac2:
                 after_end = st.date_input("End", value=url_aed, min_value=ba_min_date, max_value=ba_max_date, key="ba_after_end")
             with ach2:
-                after_end_hour = st.number_input("Hour", min_value=0, max_value=23, value=url_params.get('after_eh', 23), key="ba_after_end_h")
+                after_end_hour = st.number_input("Hour", min_value=0, max_value=23, value=url_params.get('after_eh', 8), key="ba_after_end_h")
             if after_versions:
                 total_after_users = sum(ba_installs(v, after_start, after_end, after_start_hour, after_end_hour) for v in after_versions)
                 ver_counts = " | ".join([f"v{v}: **{ba_installs(v, after_start, after_end, after_start_hour, after_end_hour):,}**" for v in after_versions])
