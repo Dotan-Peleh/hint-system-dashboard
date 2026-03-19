@@ -897,14 +897,19 @@ def main():
                 index=before_min_idx, key="ba_before_min_ver")
             before_versions = versions_gte(before_min_ver, ba_versions_asc)
             bc1, bch1, bc2, bch2 = st.columns([2, 1, 2, 1])
-            url_bsd = url_params.get('before_sd', ba_min_date)
-            url_bsd = max(ba_min_date, min(ba_max_date, url_bsd)) if isinstance(url_bsd, date) else ba_min_date
-            url_bed = url_params.get('before_ed', TEST_START_DATE if TEST_START_DATE <= ba_max_date else ba_max_date)
-            url_bed = max(ba_min_date, min(ba_max_date, url_bed)) if isinstance(url_bed, date) else (TEST_START_DATE if TEST_START_DATE <= ba_max_date else ba_max_date)
+            # Default before: same window length as after (test_start → max_date), mirrored backwards
+            from datetime import timedelta
+            default_before_end = TEST_START_DATE if TEST_START_DATE <= ba_max_date else ba_max_date
+            days_after = (ba_max_date - TEST_START_DATE).days if ba_max_date > TEST_START_DATE else 7
+            default_before_start = max(ba_min_date, TEST_START_DATE - timedelta(days=max(days_after, 1)))
+            url_bsd = url_params.get('before_sd', default_before_start)
+            url_bsd = max(ba_min_date, min(ba_max_date, url_bsd)) if isinstance(url_bsd, date) else default_before_start
+            url_bed = url_params.get('before_ed', default_before_end)
+            url_bed = max(ba_min_date, min(ba_max_date, url_bed)) if isinstance(url_bed, date) else default_before_end
             with bc1:
                 before_start = st.date_input("Start", value=url_bsd, min_value=ba_min_date, max_value=ba_max_date, key="ba_before_start")
             with bch1:
-                before_start_hour = st.number_input("Hour", min_value=0, max_value=23, value=url_params.get('before_sh', 0), key="ba_before_start_h")
+                before_start_hour = st.number_input("Hour", min_value=0, max_value=23, value=url_params.get('before_sh', TEST_START_HOUR), key="ba_before_start_h")
             with bc2:
                 before_end = st.date_input("End", value=url_bed, min_value=ba_min_date, max_value=ba_max_date, key="ba_before_end")
             with bch2:
