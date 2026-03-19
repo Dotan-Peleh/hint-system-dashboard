@@ -793,12 +793,15 @@ def main():
             with baf1:
                 ba_plat_opts = sorted(fdf_ba['platform'].dropna().unique().tolist()) if not fdf_ba.empty and 'platform' in fdf_ba.columns else []
                 url_ba_plat = url_params.get('ba_plat')
-                ba_plat_default = [p for p in ba_plat_opts if p in url_ba_plat] if url_ba_plat else ba_plat_opts
+                ba_plat_default = [p for p in ba_plat_opts if p in url_ba_plat] if url_ba_plat else [p for p in ba_plat_opts if p == 'Android'] or ba_plat_opts
                 ba_selected_platforms = st.multiselect("Platform", ba_plat_opts, default=ba_plat_default, key="ba_f_plat")
             with baf2:
                 ba_c_labels, ba_c_map, _ = opts_with_counts(fdf_ba, 'country') if not fdf_ba.empty else ([], {}, [])
                 url_ba_c = url_params.get('ba_country', [])
-                ba_c_default = [l for l in ba_c_labels if str(ba_c_map[l]) in url_ba_c] if url_ba_c else []
+                if url_ba_c:
+                    ba_c_default = [l for l in ba_c_labels if str(ba_c_map[l]) in url_ba_c]
+                else:
+                    ba_c_default = [l for l in ba_c_labels if str(ba_c_map[l]) == 'US']
                 ba_sel_c = st.multiselect("Country", ba_c_labels, default=ba_c_default, key="ba_f_country")
                 ba_selected_countries = [ba_c_map[l] for l in ba_sel_c] if ba_sel_c else None
             with baf3:
