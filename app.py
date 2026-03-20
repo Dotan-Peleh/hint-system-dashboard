@@ -293,15 +293,41 @@ def render_alerts(alerts):
 
 
 def calc_weighted_steps(subset, metrics_list):
-    tu = subset['total_users'].sum() if 'total_users' in subset.columns else len(subset)
+    # Weight by raw_step_01 (users who reached step 1) instead of total_users
+    # to compute correct global conversion rates. Using total_users as weight
+    # distorts results when step_01 != total_users (e.g. users who never fired
+    # impression_privacy inflate the denominator without contributing to numerator).
+    if 'raw_step_01' in subset.columns:
+        w = subset['raw_step_01'].fillna(0)
+    elif 'total_users' in subset.columns:
+        w = subset['total_users']
+    else:
+        w = pd.Series(1, index=subset.index)
+    tw = w.sum()
+    tu = subset['total_users'].sum() if 'total_users' in subset.columns else tw
     vals = []
     for m in metrics_list:
-        if 'total_users' in subset.columns and tu > 0:
-            val = (subset[m] * subset['total_users']).sum() / tu
+        if tw > 0:
+            val = (subset[m].fillna(0) * w).sum() / tw
         else:
             val = subset[m].mean() if not subset.empty else 0
         vals.append(val)
     return vals, tu
+
+def _pct_weight(df):
+    """Return the correct weight series for computing weighted pct_XX averages.
+    Uses raw_step_01 (users who reached step 1) when available, falls back to total_users."""
+    if 'raw_step_01' in df.columns:
+        return df['raw_step_01'].fillna(0)
+    return df['total_users'] if 'total_users' in df.columns else pd.Series(1, index=df.index)
+
+def weighted_pct_val(df, col):
+    """Compute a single weighted pct value for column col using correct step_01 weights."""
+    w = _pct_weight(df)
+    tw = w.sum()
+    if tw > 0:
+        return (df[col].fillna(0) * w).sum() / tw
+    return df[col].mean() if not df.empty else 0
 
 def add_test_start_line(fig):
     """Add a consistent test-start marker to any time-series chart."""
@@ -1277,12 +1303,7 @@ def main():
                 ver_last = {}
                 for ver in sorted(fdf['install_version_str'].unique(), key=version_sort_key):
                     vdf = fdf[fdf['install_version_str'] == ver]
-                    tu = vdf['total_users'].sum() if 'total_users' in vdf.columns else len(vdf)
-                    if tu > 0 and 'total_users' in vdf.columns:
-                        val = (vdf[last_col] * vdf['total_users']).sum() / tu
-                    else:
-                        val = vdf[last_col].mean()
-                    ver_last[ver] = val
+                    ver_last[ver] = weighted_pct_val(vdf, last_col)
                 best_ver = max(ver_last, key=ver_last.get) if ver_last else "N/A"
                 worst_ver = min(ver_last, key=ver_last.get) if ver_last else "N/A"
                 last_label = format_step_label(last_col)
@@ -1341,10 +1362,7 @@ def main():
                             if pdf.empty:
                                 continue
                             tu = pdf['total_users'].sum() if 'total_users' in pdf.columns else len(pdf)
-                            values = []
-                            for m in metrics:
-                                val = (pdf[m] * pdf['total_users']).sum() / tu if 'total_users' in pdf.columns and tu > 0 else pdf[m].mean()
-                                values.append(val)
+                            values = [weighted_pct_val(pdf, m) for m in metrics]
                             trace_name = f"v{ver} {period_label} ({tu:,.0f})"
                             if chart_type == "Line":
                                 fig.add_trace(go.Scatter(x=step_labels, y=values, mode='lines+markers', name=trace_name,
@@ -1355,10 +1373,7 @@ def main():
                                     opacity=0.6 if period_label == "Before" else 1.0))
                     else:
                         tu = vdf['total_users'].sum() if 'total_users' in vdf.columns else len(vdf)
-                        values = []
-                        for m in metrics:
-                            val = (vdf[m] * vdf['total_users']).sum() / tu if 'total_users' in vdf.columns and tu > 0 else vdf[m].mean()
-                            values.append(val)
+                        values = [weighted_pct_val(vdf, m) for m in metrics]
                         if chart_type == "Line":
                             fig.add_trace(go.Scatter(x=step_labels, y=values, mode='lines+markers', name=str(ver),
                                 line=dict(color=ver_color, width=2), marker=dict(size=6),
@@ -1370,10 +1385,7 @@ def main():
                 fv_df = fdf[fdf['install_version_str'] == first_ver]
                 fv_tu = fv_df['total_users'].sum() if 'total_users' in fv_df.columns else len(fv_df)
                 if fv_tu > 0 and chart_type == "Line":
-                    fv_vals = []
-                    for m in metrics:
-                        val = (fv_df[m] * fv_df['total_users']).sum() / fv_tu if 'total_users' in fv_df.columns else fv_df[m].mean()
-                        fv_vals.append(val)
+                    fv_vals = [weighted_pct_val(fv_df, m) for m in metrics]
                     # Find top 3 drops
                     drops = []
                     for i in range(1, len(fv_vals)):
@@ -1404,8 +1416,7 @@ def main():
                     tu = vdf['total_users'].sum() if 'total_users' in vdf.columns else len(vdf)
                     row = {'Version': ver, 'Users': fmt_number(tu)}
                     for m in metrics:
-                        val = (vdf[m] * vdf['total_users']).sum() / tu if 'total_users' in vdf.columns and tu > 0 else vdf[m].mean()
-                        row[format_step_label(m)] = fmt_pct(val)
+                        row[format_step_label(m)] = fmt_pct(weighted_pct_val(vdf, m))
                     rows.append(row)
                 st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
@@ -1490,13 +1501,7 @@ def main():
                     tu = vdf['total_users'].sum() if 'total_users' in vdf.columns else len(vdf)
                     if tu < 100:
                         continue
-                    ver_vals = []
-                    for m in pct_cols:
-                        if 'total_users' in vdf.columns and tu > 0:
-                            val = (vdf[m] * vdf['total_users']).sum() / tu
-                        else:
-                            val = vdf[m].mean()
-                        ver_vals.append((m, val))
+                    ver_vals = [(m, weighted_pct_val(vdf, m)) for m in pct_cols]
                     all_step_vals[ver] = ver_vals
 
                 found_upticks = []
@@ -1610,8 +1615,8 @@ def main():
                         biggest_drop_step, biggest_drop_val = None, 0
                         biggest_gain_step, biggest_gain_val = None, 0
                         for col in t_pct:
-                            vb = (bdf_t[col] * bdf_t['total_users']).sum() / tub if 'total_users' in bdf_t.columns else bdf_t[col].mean()
-                            va = (adf_t[col] * adf_t['total_users']).sum() / tua if 'total_users' in adf_t.columns else adf_t[col].mean()
+                            vb = weighted_pct_val(bdf_t, col)
+                            va = weighted_pct_val(adf_t, col)
                             if vb > 0:
                                 change_pct = (va - vb) / vb * 100
                                 if change_pct < biggest_drop_val:
@@ -1677,14 +1682,10 @@ def main():
                     for label in t_selected:
                         col = t_label_map.get(label)
                         if col and col in gdf.columns:
-                            if 'total_users' in gdf.columns:
-                                val = (gdf[col] * gdf['total_users']).sum() / tu
-                            else:
-                                val = gdf[col].mean()
                             trend_records.append({
                                 'period': period_val,
                                 'step': label,
-                                'value': val,
+                                'value': weighted_pct_val(gdf, col),
                                 'users': tu,
                             })
 
@@ -1749,8 +1750,8 @@ def main():
                             adf = fdf[fdf['install_date'] >= TEST_START_DATE]
                             tub = bdf['total_users'].sum() if 'total_users' in bdf.columns else len(bdf)
                             tua = adf['total_users'].sum() if 'total_users' in adf.columns else len(adf)
-                            vb = (bdf[col] * bdf['total_users']).sum() / tub if 'total_users' in bdf.columns and tub > 0 else (bdf[col].mean() if not bdf.empty else 0)
-                            va = (adf[col] * adf['total_users']).sum() / tua if 'total_users' in adf.columns and tua > 0 else (adf[col].mean() if not adf.empty else 0)
+                            vb = weighted_pct_val(bdf, col) if not bdf.empty else 0
+                            va = weighted_pct_val(adf, col) if not adf.empty else 0
                             delta = va - vb
                             pct_ch = (delta / vb * 100) if vb > 0 else 0
                             summary_rows.append({
@@ -1931,8 +1932,7 @@ def main():
                     recs = []
                     for (dt, ver), gdf in fdf.groupby(['install_date', 'install_version_str']):
                         tu = gdf['total_users'].sum() if 'total_users' in gdf.columns else len(gdf)
-                        val = (gdf[step_col] * gdf['total_users']).sum() / tu if 'total_users' in gdf.columns and tu > 0 else gdf[step_col].mean()
-                        recs.append({'date': dt, 'version': str(ver), 'value': val, 'users': tu})
+                        recs.append({'date': dt, 'version': str(ver), 'value': weighted_pct_val(gdf, step_col), 'users': tu})
                     ddf = pd.DataFrame(recs).dropna(subset=['value'])
                     if ddf.empty: continue
                     ddf['date'] = pd.to_datetime(ddf['date'])
@@ -1957,8 +1957,8 @@ def main():
                         row = {'Version': ver, 'Users Before': fmt_number(ub), 'Users After': fmt_number(ua)}
                         for sc in [l2c[s] for s in sel]:
                             lb = format_step_label(sc)
-                            vvb = (vb[sc] * vb['total_users']).sum() / ub if 'total_users' in vb.columns and ub > 0 else (vb[sc].mean() if not vb.empty else 0)
-                            vva = (va[sc] * va['total_users']).sum() / ua if 'total_users' in va.columns and ua > 0 else (va[sc].mean() if not va.empty else 0)
+                            vvb = weighted_pct_val(vb, sc) if not vb.empty else 0
+                            vva = weighted_pct_val(va, sc) if not va.empty else 0
                             row[f"{lb} Before"] = fmt_pct(vvb)
                             row[f"{lb} After"] = fmt_pct(vva)
                             d = vva - vvb

@@ -596,6 +596,7 @@ SELECT
   v.platform, v.country, v.is_low_payers_country, v.mediasource,
   COALESCE(m.media_type, CASE WHEN v.mediasource = 'organic' THEN 'organic' ELSE 'none' END) AS media_type,
   v.total_users,
+  v.step_01 AS raw_step_01,
 
   -- Conversion rates (% of step 1)
   ROUND(step_01 / NULLIF(step_01, 0), 4) AS pct_01_impression_privacy,
