@@ -6,6 +6,7 @@ import numpy as np
 from google.cloud import bigquery
 from google.oauth2 import service_account
 from datetime import date, datetime
+from scipy.stats import chi2_contingency
 
 # =============================================================================
 # CONFIG
@@ -333,6 +334,34 @@ def weighted_pct_val(df, col):
     if tw > 0:
         return (df[col].fillna(0) * w).sum() / tw
     return df[col].mean() if not df.empty else 0
+
+def compute_significance(pct_before, n_before, pct_after, n_after):
+    """Chi-squared test for significance between two proportions.
+    Returns (p_value, is_significant at 95%, label string)."""
+    if n_before < 10 or n_after < 10 or pct_before is None or pct_after is None:
+        return 1.0, False, "N/A"
+    # Build 2x2 contingency table: [passed, failed] x [before, after]
+    a = round(pct_before * n_before)  # passed before
+    b = round(n_before - a)            # failed before
+    c = round(pct_after * n_after)     # passed after
+    d = round(n_after - c)             # failed after
+    if min(a, b, c, d) < 0:
+        return 1.0, False, "N/A"
+    try:
+        table = [[a, c], [b, d]]
+        chi2, p, dof, expected = chi2_contingency(table, correction=True)
+        sig = p < 0.05
+        if p < 0.001:
+            label = "p<0.001"
+        elif p < 0.01:
+            label = f"p={p:.3f}"
+        elif p < 0.05:
+            label = f"p={p:.3f}"
+        else:
+            label = f"p={p:.2f}"
+        return p, sig, label
+    except Exception:
+        return 1.0, False, "N/A"
 
 def add_test_start_line(fig):
     """Add a consistent test-start marker to any time-series chart."""
@@ -1066,6 +1095,7 @@ def main():
             def plot_group(versions, date_start, date_end, start_h, end_h, period_label, base_color, dash_avg):
                 group_all_vals = []
                 group_all_users = []
+                group_step01 = 0
                 for ver in sorted(versions, key=version_sort_key):
                     vdf = fdf_ba[fdf_ba['install_version_str'] == str(ver)]
                     vdf = ba_filter_date_hour(vdf, date_start, date_end, start_h, end_h)
@@ -1074,8 +1104,12 @@ def main():
                         continue
                     group_all_vals.append(vals)
                     group_all_users.append(users)
+                    if 'raw_step_01' in vdf.columns:
+                        group_step01 += int(vdf['raw_step_01'].fillna(0).sum())
+                    else:
+                        group_step01 += users
                 if not group_all_vals:
-                    return None, 0
+                    return None, 0, 0
                 total_u = sum(group_all_users)
                 # Single version: use its values directly; multiple: weighted average
                 if len(group_all_vals) == 1:
@@ -1097,23 +1131,31 @@ def main():
                     hovertemplate='<b>%{x}</b><br>' + period_label + f' ({ver_label}, {total_u:,.0f})' + ': %{y:.4f}<extra></extra>',
                     legendgroup=period_label,
                 ))
-                return agg_vals, total_u
+                return agg_vals, total_u, group_step01
 
-            avg_before, users_before = plot_group(before_versions, before_start, before_end, before_start_hour, before_end_hour, "Before", COLORS['before'], 'solid')
-            avg_after, users_after = plot_group(after_versions, after_start, after_end, after_start_hour, after_end_hour, "After", COLORS['after'], 'dash')
+            avg_before, users_before, step01_before = plot_group(before_versions, before_start, before_end, before_start_hour, before_end_hour, "Before", COLORS['before'], 'solid')
+            avg_after, users_after, step01_after = plot_group(after_versions, after_start, after_end, after_start_hour, after_end_hour, "After", COLORS['after'], 'dash')
 
             # Lift annotations on funnel chart — every step
+            # Compute significance per step
+            sig_results = []
             if avg_before and avg_after:
                 for i in range(len(avg_before)):
                     if avg_before[i] > 0:
-                        lift_pp = (avg_after[i] - avg_before[i]) * 100  # percentage points
+                        lift_pp = (avg_after[i] - avg_before[i]) * 100
+                        p_val, is_sig, p_label = compute_significance(
+                            avg_before[i], step01_before, avg_after[i], step01_after)
+                        sig_results.append((lift_pp, is_sig, p_label, p_val))
                         ann_color = COLORS['after'] if lift_pp > 0 else COLORS['negative']
+                        sig_marker = " *" if is_sig else ""
                         fig_ba.add_annotation(
                             x=active_labels[i], y=max(avg_before[i], avg_after[i]),
-                            text=f"<b>{lift_pp:+.1f}pp</b>", showarrow=False,
+                            text=f"<b>{lift_pp:+.1f}pp{sig_marker}</b>", showarrow=False,
                             yshift=14, font=dict(size=9, color=ann_color),
                             bgcolor='rgba(255,255,255,0.8)', borderpad=2,
                         )
+                    else:
+                        sig_results.append((0, False, "N/A", 1.0))
 
             before_ver_str = ", ".join([f"v{v}" for v in before_versions[:3]])
             after_ver_str = ", ".join([f"v{v}" for v in after_versions[:3]])
@@ -1156,11 +1198,13 @@ def main():
                 lifts_all = [(avg_after[i] - avg_before[i]) * 100 for i in range(len(avg_before))]
                 improved = [l for l in lifts_all if l > 0.5]
                 declined = [l for l in lifts_all if l < -0.5]
-                c1, c2, c3, c4 = st.columns(4)
+                sig_count = sum(1 for s in sig_results if s[1]) if sig_results else 0
+                c1, c2, c3, c4, c5 = st.columns(5)
                 c1.metric("Avg Lift", f"{np.mean(lifts_all):+.1f}pp")
                 c2.metric("Steps Improved", f"{len(improved)}/{len(lifts_all)}")
                 c3.metric("Steps Declined", f"{len(declined)}/{len(lifts_all)}")
                 c4.metric("Last Step Lift", f"{lifts_all[-1]:+.1f}pp")
+                c5.metric("Significant Steps", f"{sig_count}/{len(lifts_all)}")
 
             # --- LIFT DELTA CHART: % difference per step ---
             if avg_before and avg_after:
@@ -1196,6 +1240,11 @@ def main():
 
             # --- Detailed table ---
             st.markdown("#### Detailed Comparison")
+            st.markdown('<div class="legend-box"><b>Significance:</b> '
+                        'Chi-squared test at 95% confidence. '
+                        '<b>*</b> = statistically significant (p &lt; 0.05). '
+                        f'Sample sizes: Before n={step01_before:,} (step 1 users), After n={step01_after:,}.</div>',
+                        unsafe_allow_html=True)
             detail_rows = []
             for i in range(len(active_labels)):
                 row = {'Step': active_labels[i]}
@@ -1206,9 +1255,18 @@ def main():
                     delta_abs = avg_after[i] - avg_before[i]
                     row['Delta'] = f"{delta_abs:+.4f}"
                     row['Lift (pp)'] = f"{lift_pp:+.1f}pp"
+                    if i < len(sig_results):
+                        _, is_sig, p_label, _ = sig_results[i]
+                        row['p-value'] = p_label
+                        row['Significant'] = "Yes *" if is_sig else "No"
+                    else:
+                        row['p-value'] = '-'
+                        row['Significant'] = '-'
                 else:
                     row['Delta'] = '-'
                     row['Lift (pp)'] = '-'
+                    row['p-value'] = '-'
+                    row['Significant'] = '-'
                 detail_rows.append(row)
             st.dataframe(pd.DataFrame(detail_rows), use_container_width=True, hide_index=True, height=500)
 
