@@ -160,9 +160,14 @@ def get_bq_client():
 @st.cache_data(ttl=600)
 def load_ftue_data():
     client = get_bq_client()
+    # Exclude yesterday (T-1) because FTUE events are incomplete for users
+    # who installed recently and haven't finished the funnel yet.
+    # The BQ scheduled query includes T-1, but late-funnel steps are severely
+    # deflated for the most recent day, distorting weighted averages.
     query = f"""
     SELECT * FROM `{FTUE_TABLE}`
     WHERE install_date >= '2026-02-01'
+      AND install_date < CURRENT_DATE() - 1
       AND SAFE_CAST(install_version AS FLOAT64) >= 0.38
       AND platform != 'none'
     """
@@ -486,7 +491,7 @@ def main():
     url_params = parse_url_params()
 
     st.markdown("## Hint System Dashboard")
-    st.caption(f"Comparing FTUE funnel & retention before vs after test start ({TEST_START_DATE.strftime('%b %d, %Y')})")
+    st.caption(f"Comparing FTUE funnel & retention before vs after test start ({TEST_START_DATE.strftime('%b %d, %Y')}) — Data through T-2 (yesterday excluded: FTUE events incomplete for recent installs)")
 
     # Load data
     with st.spinner("Loading data from BigQuery..."):
