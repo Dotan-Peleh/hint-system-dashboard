@@ -853,7 +853,7 @@ def main():
             with baf1:
                 ba_plat_opts = sorted(fdf_ba['platform'].dropna().unique().tolist()) if not fdf_ba.empty and 'platform' in fdf_ba.columns else []
                 url_ba_plat = url_params.get('ba_plat')
-                ba_plat_default = [p for p in ba_plat_opts if p in url_ba_plat] if url_ba_plat else [p for p in ba_plat_opts if p == 'Android'] or ba_plat_opts
+                ba_plat_default = [p for p in ba_plat_opts if p in url_ba_plat] if url_ba_plat else ba_plat_opts
                 ba_selected_platforms = st.multiselect("Platform", ba_plat_opts, default=ba_plat_default, key="ba_f_plat")
             with baf2:
                 ba_c_labels, ba_c_map, _ = opts_with_counts(fdf_ba, 'country') if not fdf_ba.empty else ([], {}, [])
@@ -861,7 +861,7 @@ def main():
                 if url_ba_c:
                     ba_c_default = [l for l in ba_c_labels if str(ba_c_map[l]) in url_ba_c]
                 else:
-                    ba_c_default = [l for l in ba_c_labels if str(ba_c_map[l]) == 'US']
+                    ba_c_default = ba_c_labels  # Default to all countries
                 ba_sel_c = st.multiselect("Country", ba_c_labels, default=ba_c_default, key="ba_f_country")
                 ba_selected_countries = [ba_c_map[l] for l in ba_sel_c] if ba_sel_c else None
             with baf3:
@@ -1095,7 +1095,7 @@ def main():
             def plot_group(versions, date_start, date_end, start_h, end_h, period_label, base_color, dash_avg):
                 group_all_vals = []
                 group_all_users = []
-                group_step01 = 0
+                group_all_step01 = []
                 for ver in sorted(versions, key=version_sort_key):
                     vdf = fdf_ba[fdf_ba['install_version_str'] == str(ver)]
                     vdf = ba_filter_date_hour(vdf, date_start, date_end, start_h, end_h)
@@ -1104,21 +1104,23 @@ def main():
                         continue
                     group_all_vals.append(vals)
                     group_all_users.append(users)
-                    if 'raw_step_01' in vdf.columns:
-                        group_step01 += int(vdf['raw_step_01'].fillna(0).sum())
-                    else:
-                        group_step01 += users
+                    s01 = int(vdf['raw_step_01'].fillna(0).sum()) if 'raw_step_01' in vdf.columns else users
+                    group_all_step01.append(s01)
                 if not group_all_vals:
                     return None, 0, 0
                 total_u = sum(group_all_users)
-                # Single version: use its values directly; multiple: weighted average
+                total_s01 = sum(group_all_step01)
+                # Single version: use its values directly; multiple: weighted avg by step_01
                 if len(group_all_vals) == 1:
                     agg_vals = group_all_vals[0]
                     ver_label = f"v{sorted(versions, key=version_sort_key)[0]}"
                 else:
-                    agg_vals = [sum(group_all_vals[j][i] * group_all_users[j] for j in range(len(group_all_vals))) / total_u
+                    w = group_all_step01 if total_s01 > 0 else group_all_users
+                    tw = sum(w)
+                    agg_vals = [sum(group_all_vals[j][i] * w[j] for j in range(len(group_all_vals))) / tw
                                 for i in range(len(active_labels))]
                     ver_label = f"{len(group_all_vals)} versions"
+                agg_vals = enforce_monotonic(agg_vals)
                 # Plot single aggregated line per group
                 fig_ba.add_trace(go.Scatter(
                     x=active_labels, y=agg_vals,
@@ -1131,7 +1133,7 @@ def main():
                     hovertemplate='<b>%{x}</b><br>' + period_label + f' ({ver_label}, {total_u:,.0f})' + ': %{y:.4f}<extra></extra>',
                     legendgroup=period_label,
                 ))
-                return agg_vals, total_u, group_step01
+                return agg_vals, total_u, total_s01
 
             avg_before, users_before, step01_before = plot_group(before_versions, before_start, before_end, before_start_hour, before_end_hour, "Before", COLORS['before'], 'solid')
             avg_after, users_after, step01_after = plot_group(after_versions, after_start, after_end, after_start_hour, after_end_hour, "After", COLORS['after'], 'dash')
@@ -1276,17 +1278,19 @@ def main():
                 do_labels = [format_step_label(m) for m in pct_cols_do]
                 # Recompute averages on pct metrics for drop-off
                 def compute_avg_pct(versions, ds, de, sh=0, eh=23):
-                    all_v, all_u = [], []
+                    all_v, all_w = [], []
                     for ver in versions:
                         vdf = fdf_ba[fdf_ba['install_version_str'] == str(ver)]
                         vdf = ba_filter_date_hour(vdf, ds, de, sh, eh)
                         v, u = calc_weighted_steps(vdf, pct_cols_do)
                         if v and u > 0:
-                            all_v.append(v); all_u.append(u)
+                            s01 = int(vdf['raw_step_01'].fillna(0).sum()) if 'raw_step_01' in vdf.columns else u
+                            all_v.append(v); all_w.append(s01)
                     if not all_v:
                         return None
-                    tu = sum(all_u)
-                    return [sum(all_v[j][i] * all_u[j] for j in range(len(all_v))) / tu for i in range(len(pct_cols_do))]
+                    tw = sum(all_w)
+                    agg = [sum(all_v[j][i] * all_w[j] for j in range(len(all_v))) / tw for i in range(len(pct_cols_do))]
+                    return enforce_monotonic(agg)
 
                 avg_b_pct = compute_avg_pct(before_versions, before_start, before_end, before_start_hour, before_end_hour)
                 avg_a_pct = compute_avg_pct(after_versions, after_start, after_end, after_start_hour, after_end_hour)
