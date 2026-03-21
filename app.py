@@ -861,7 +861,7 @@ def main():
                 if url_ba_c:
                     ba_c_default = [l for l in ba_c_labels if str(ba_c_map[l]) in url_ba_c]
                 else:
-                    ba_c_default = ba_c_labels  # Default to all countries
+                    ba_c_default = [l for l in ba_c_labels if str(ba_c_map[l]) == 'US']
                 ba_sel_c = st.multiselect("Country", ba_c_labels, default=ba_c_default, key="ba_f_country")
                 ba_selected_countries = [ba_c_map[l] for l in ba_sel_c] if ba_sel_c else None
             with baf3:
