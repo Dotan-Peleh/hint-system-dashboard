@@ -19,6 +19,7 @@ RETENTION_TABLE = f"{BQ_PROJECT}.peerplay.hint_system_ab_test_results"
 TEST_START_DATE = date(2026, 3, 16)
 TEST_START_HOUR = 17  # 5:00 PM UTC
 DEFAULT_VERSION = '0.3811'
+DEFAULT_AFTER_VERSION = '0.3812'
 
 DAYS_SINCE_INSTALL_BUCKET_ORDER = ['0-3', '3-7', '7-14', '14-21', '21-30', '30-60']
 
@@ -844,6 +845,15 @@ def main():
                     'Pick versions + date ranges for each group, then compare. '
                     '<strong style="color:#5B8DEF">Blue = Before</strong> &nbsp;&nbsp;'
                     '<strong style="color:#2ECB71">Green = After</strong></div>', unsafe_allow_html=True)
+        st.markdown(
+            '<div style="background:#FFF3CD;border:1px solid #FFCD39;border-radius:8px;padding:14px 18px;margin-bottom:16px;">'
+            '<b>⚠️ IMPORTANT:</b> The After group should use <b>Min Version 0.3812</b> (not 0.3811). '
+            'v0.3812 is the only version with the Hint System baked in. '
+            'Users who installed v0.3811 after the test start are <b>late adopters</b> '
+            '(delayed app store updates, cached APKs) — they are a small, non-representative group '
+            'with a different country/device mix that drags down the average and produces misleading results. '
+            'Compare v0.3811 (Before, no hints) vs v0.3812 (After, with hints) for a clean comparison.'
+            '</div>', unsafe_allow_html=True)
 
         # =================================================================
         # BA TAB INLINE FILTERS (completely independent from sidebar)
@@ -946,7 +956,7 @@ def main():
 
         # Default min version from URL or DEFAULT_VERSION
         url_before_min = url_params.get('before_min_ver', DEFAULT_VERSION)
-        url_after_min = url_params.get('after_min_ver', DEFAULT_VERSION)
+        url_after_min = url_params.get('after_min_ver', DEFAULT_AFTER_VERSION)
 
         col_before, col_vs, col_after = st.columns([5, 0.5, 5])
         with col_before:
@@ -1008,7 +1018,7 @@ def main():
             with ac2:
                 after_end = st.date_input("End", value=url_aed, min_value=ba_min_date, max_value=ba_max_date, key="ba_after_end")
             with ach2:
-                after_end_hour = st.number_input("Hour", min_value=0, max_value=23, value=url_params.get('after_eh', 8), key="ba_after_end_h")
+                after_end_hour = st.number_input("Hour", min_value=0, max_value=23, value=url_params.get('after_eh', 23), key="ba_after_end_h")
             if after_versions:
                 total_after_users = sum(ba_installs(v, after_start, after_end, after_start_hour, after_end_hour) for v in after_versions)
                 ver_counts = " | ".join([f"v{v}: **{ba_installs(v, after_start, after_end, after_start_hour, after_end_hour):,}**" for v in after_versions])
