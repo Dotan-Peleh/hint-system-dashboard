@@ -19,7 +19,7 @@ RETENTION_TABLE = f"{BQ_PROJECT}.peerplay.hint_system_ab_test_results"
 
 TEST_START_DATE = date(2026, 3, 22)
 TEST_START_HOUR = 14  # 2:00 PM UTC
-DEFAULT_VERSION = '0.3811'
+DEFAULT_VERSION = '0.3812'
 DEFAULT_AFTER_VERSION = '0.3812'
 
 DAYS_SINCE_INSTALL_BUCKET_ORDER = ['0-3', '3-7', '7-14', '14-21', '21-30', '30-60']
@@ -163,14 +163,9 @@ def get_bq_client():
 @st.cache_data(ttl=600)
 def load_ftue_data():
     client = get_bq_client()
-    # Exclude yesterday (T-1) because FTUE events are incomplete for users
-    # who installed recently and haven't finished the funnel yet.
-    # The BQ scheduled query includes T-1, but late-funnel steps are severely
-    # deflated for the most recent day, distorting weighted averages.
     query = f"""
     SELECT * FROM `{FTUE_TABLE}`
     WHERE install_date >= '2026-02-01'
-      AND install_date < CURRENT_DATE() - 1
       AND SAFE_CAST(install_version AS FLOAT64) >= 0.38
       AND platform != 'none'
     """
@@ -542,7 +537,7 @@ def main():
     url_params = parse_url_params()
 
     st.markdown("## Hint System Dashboard")
-    st.caption(f"Comparing FTUE funnel & retention before vs after test start ({TEST_START_DATE.strftime('%b %d, %Y')}) — Data through T-2 (yesterday excluded: FTUE events incomplete for recent installs)")
+    st.caption(f"Comparing FTUE funnel & retention before vs after test start ({TEST_START_DATE.strftime('%b %d, %Y')} {TEST_START_HOUR}:00 UTC)")
 
     # Load data
     with st.spinner("Loading data from BigQuery..."):
@@ -992,7 +987,7 @@ def main():
             before_versions = versions_gte(before_min_ver, ba_versions_asc)
             bc1, bch1, bc2, bch2 = st.columns([2, 1, 2, 1])
             from datetime import timedelta
-            default_before_start = max(ba_min_date, TEST_START_DATE - timedelta(days=6))
+            default_before_start = max(ba_min_date, date(2026, 3, 17))
             default_before_end = min(ba_max_date, TEST_START_DATE)
             url_bsd = url_params.get('before_sd', default_before_start)
             url_bsd = max(ba_min_date, min(ba_max_date, url_bsd)) if isinstance(url_bsd, date) else default_before_start
@@ -1001,7 +996,7 @@ def main():
             with bc1:
                 before_start = st.date_input("Start", value=url_bsd, min_value=ba_min_date, max_value=ba_max_date, key="ba_before_start")
             with bch1:
-                before_start_hour = st.number_input("Hour", min_value=0, max_value=23, value=url_params.get('before_sh', TEST_START_HOUR - 1 if TEST_START_HOUR > 0 else 23), key="ba_before_start_h")
+                before_start_hour = st.number_input("Hour", min_value=0, max_value=23, value=url_params.get('before_sh', 0), key="ba_before_start_h")
             with bc2:
                 before_end = st.date_input("End", value=url_bed, min_value=ba_min_date, max_value=ba_max_date, key="ba_before_end")
             with bch2:
