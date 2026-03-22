@@ -14,6 +14,7 @@ from scipy.stats import chi2_contingency
 
 BQ_PROJECT = "yotam-395120"
 FTUE_TABLE = f"{BQ_PROJECT}.peerplay.ftue_dashboard_fixed"
+FTUE_TABLE_48H = f"{BQ_PROJECT}.peerplay.ftue_dashboard_48h"
 RETENTION_TABLE = f"{BQ_PROJECT}.peerplay.hint_system_ab_test_results"
 
 TEST_START_DATE = date(2026, 3, 16)
@@ -170,6 +171,24 @@ def load_ftue_data():
     SELECT * FROM `{FTUE_TABLE}`
     WHERE install_date >= '2026-02-01'
       AND install_date < CURRENT_DATE() - 1
+      AND SAFE_CAST(install_version AS FLOAT64) >= 0.38
+      AND platform != 'none'
+    """
+    df = client.query(query).to_dataframe()
+    if 'install_date' in df.columns:
+        df['install_date'] = pd.to_datetime(df['install_date']).dt.date
+    return df
+
+
+@st.cache_data(ttl=600)
+def load_ftue_data_48h():
+    """Load FTUE data with 48-hour observation window per user.
+    Only counts events within 48h of install. Uses T-2 cutoff."""
+    client = get_bq_client()
+    query = f"""
+    SELECT * FROM `{FTUE_TABLE_48H}`
+    WHERE install_date >= '2026-02-01'
+      AND install_date < CURRENT_DATE() - 2
       AND SAFE_CAST(install_version AS FLOAT64) >= 0.38
       AND platform != 'none'
     """
@@ -478,6 +497,8 @@ def parse_url_params():
         params['ba_mt'] = _csv_param(qp, 'ba_mt')
     if 'ba_lp' in qp:
         params['ba_lp'] = qp['ba_lp']
+    if 'ba_48h' in qp:
+        params['ba_48h'] = qp['ba_48h'] == '1'
     return params
 
 def update_url_params(**kwargs):
@@ -1030,7 +1051,7 @@ def main():
                 st.markdown(ver_counts)
 
         # --- Options ---
-        opt1, opt2, opt3 = st.columns([2, 1, 1])
+        opt1, opt2, opt2b, opt3 = st.columns([2, 1, 1.5, 1])
         with opt1:
             ba_metric_options = ["Conversion vs Step 1"]
             ratio_cols_ba = get_ratio_columns(fdf_ba) if not fdf_ba.empty else []
@@ -1040,6 +1061,9 @@ def main():
             ba_metric_set = st.selectbox("Metric set", ba_metric_options, index=url_ba_metric_idx, key="ba_metric_set")
         with opt2:
             st.checkbox("Include Ch 4 & 5", value=url_params.get('ch45', False), key="include_ch4_ch5")
+        with opt2b:
+            ba_48h_mode = st.checkbox("48h Observation Window", value=url_params.get('ba_48h', False), key="ba_48h_window",
+                                      help="Only count FTUE events within 48 hours of install. Shows both regular and 48h-windowed data for comparison.")
         with opt3:
             # Build share URL with all BA filters
             ba_params = {}
@@ -1058,6 +1082,8 @@ def main():
                 ba_params['ba_metric'] = 'ratio'
             if st.session_state.get('include_ch4_ch5', False):
                 ba_params['ch45'] = '1'
+            if st.session_state.get('ba_48h_window', False):
+                ba_params['ba_48h'] = '1'
             if ba_selected_platforms and ba_plat_opts and set(ba_selected_platforms) != set(ba_plat_opts):
                 ba_params['ba_plat'] = ','.join(ba_selected_platforms)
             if ba_selected_countries:
@@ -1084,6 +1110,30 @@ def main():
             )
             st.markdown(copy_js, unsafe_allow_html=True)
 
+        # --- Load 48h data if checkbox is enabled ---
+        fdf_ba_48h = pd.DataFrame()
+        if ba_48h_mode:
+            try:
+                ftue_48h_raw = load_ftue_data_48h()
+                if not ftue_48h_raw.empty:
+                    fdf_ba_48h = ftue_48h_raw.copy()
+                    if 'install_version' in fdf_ba_48h.columns:
+                        fdf_ba_48h['install_version_str'] = fdf_ba_48h['install_version'].astype(str)
+                    # Apply same BA inline filters to 48h data
+                    if ba_selected_platforms and 'platform' in fdf_ba_48h.columns:
+                        fdf_ba_48h = fdf_ba_48h[fdf_ba_48h['platform'].isin(ba_selected_platforms)]
+                    if ba_selected_countries is not None and 'country' in fdf_ba_48h.columns:
+                        fdf_ba_48h = fdf_ba_48h[fdf_ba_48h['country'].isin(ba_selected_countries)]
+                    if ba_selected_mediasource is not None and 'mediasource' in fdf_ba_48h.columns:
+                        fdf_ba_48h = fdf_ba_48h[fdf_ba_48h['mediasource'].isin(ba_selected_mediasource)]
+                    if ba_selected_media_type is not None and 'media_type' in fdf_ba_48h.columns:
+                        fdf_ba_48h = fdf_ba_48h[fdf_ba_48h['media_type'].isin(ba_selected_media_type)]
+                    if ba_selected_low_payers is not None and 'is_low_payers_country' in fdf_ba_48h.columns:
+                        fdf_ba_48h = fdf_ba_48h[fdf_ba_48h['is_low_payers_country'] == ba_selected_low_payers]
+            except Exception:
+                st.warning("48h observation window table not available yet. Run `ftue_query_fix_48h.sql` in BigQuery to create it.")
+                fdf_ba_48h = pd.DataFrame()
+
         has_ftue = not fdf_ba.empty
         has_ret = not rdf_ba.empty
         pct_cols_ba = get_pct_columns(fdf_ba) if has_ftue else []
@@ -1097,17 +1147,32 @@ def main():
                 active_metrics = pct_cols_ba
             active_labels = [format_step_label(m) for m in active_metrics]
 
+            # 48h mode info box
+            if ba_48h_mode:
+                if not fdf_ba_48h.empty:
+                    st.markdown(
+                        '<div style="background:#E8F8F5;border:1px solid #1ABC9C;border-radius:8px;padding:14px 18px;margin-bottom:16px;">'
+                        '<b>48h Observation Window ON</b> — Only FTUE events within 48 hours of install are counted. '
+                        'Faded lines show the original (unrestricted) data for comparison. '
+                        'Solid lines show 48h-windowed data. '
+                        'Data uses T-2 cutoff (last 2 days excluded) to ensure complete observation windows.'
+                        '</div>', unsafe_allow_html=True)
+                else:
+                    st.warning("48h table is empty or unavailable. Showing regular data only.")
+
             st.markdown("---")
 
             fig_ba = go.Figure()
 
             # --- Helper: compute and plot one group ---
-            def plot_group(versions, date_start, date_end, start_h, end_h, period_label, base_color, dash_avg):
+            def plot_group(versions, date_start, date_end, start_h, end_h, period_label, base_color, dash_avg,
+                           data_df=None, line_width=3, opacity=1.0, name_suffix="", legendgroup_suffix=""):
+                src_df = data_df if data_df is not None else fdf_ba
                 group_all_vals = []
                 group_all_users = []
                 group_all_step01 = []
                 for ver in sorted(versions, key=version_sort_key):
-                    vdf = fdf_ba[fdf_ba['install_version_str'] == str(ver)]
+                    vdf = src_df[src_df['install_version_str'] == str(ver)]
                     vdf = ba_filter_date_hour(vdf, date_start, date_end, start_h, end_h)
                     vals, users = calc_weighted_steps(vdf, active_metrics)
                     if not vals or users == 0:
@@ -1131,22 +1196,44 @@ def main():
                                 for i in range(len(active_labels))]
                     ver_label = f"{len(group_all_vals)} versions"
                 agg_vals = enforce_monotonic(agg_vals)
+                display_name = f"{period_label}{name_suffix} ({ver_label}, {total_u:,.0f})"
                 # Plot single aggregated line per group
                 fig_ba.add_trace(go.Scatter(
                     x=active_labels, y=agg_vals,
                     mode='lines+markers',
-                    name=f"{period_label} ({ver_label}, {total_u:,.0f})",
-                    line=dict(color=base_color, width=3,
+                    name=display_name,
+                    line=dict(color=base_color, width=line_width,
                               dash='solid' if period_label == 'Before' else 'dot'),
-                    marker=dict(size=7, symbol='circle' if period_label == 'Before' else 'diamond',
+                    marker=dict(size=7 if opacity == 1.0 else 4,
+                                symbol='circle' if period_label == 'Before' else 'diamond',
                                 line=dict(width=1.5, color='white')),
-                    hovertemplate='<b>%{x}</b><br>' + period_label + f' ({ver_label}, {total_u:,.0f})' + ': %{y:.4f}<extra></extra>',
-                    legendgroup=period_label,
+                    opacity=opacity,
+                    hovertemplate='<b>%{x}</b><br>' + display_name + ': %{y:.4f}<extra></extra>',
+                    legendgroup=period_label + legendgroup_suffix,
                 ))
                 return agg_vals, total_u, total_s01
 
-            avg_before, users_before, step01_before = plot_group(before_versions, before_start, before_end, before_start_hour, before_end_hour, "Before", COLORS['before'], 'solid')
-            avg_after, users_after, step01_after = plot_group(after_versions, after_start, after_end, after_start_hour, after_end_hour, "After", COLORS['after'], 'dash')
+            # When 48h mode is on, plot regular data as faded background lines
+            if ba_48h_mode and not fdf_ba_48h.empty:
+                # Faded regular lines (background)
+                plot_group(before_versions, before_start, before_end, before_start_hour, before_end_hour,
+                           "Before", COLORS['before'], 'solid',
+                           data_df=fdf_ba, line_width=1.5, opacity=0.3, name_suffix=" (no window)", legendgroup_suffix="_orig")
+                plot_group(after_versions, after_start, after_end, after_start_hour, after_end_hour,
+                           "After", COLORS['after'], 'dash',
+                           data_df=fdf_ba, line_width=1.5, opacity=0.3, name_suffix=" (no window)", legendgroup_suffix="_orig")
+                # Solid 48h lines (primary)
+                avg_before, users_before, step01_before = plot_group(
+                    before_versions, before_start, before_end, before_start_hour, before_end_hour,
+                    "Before", COLORS['before'], 'solid',
+                    data_df=fdf_ba_48h, name_suffix=" (48h)")
+                avg_after, users_after, step01_after = plot_group(
+                    after_versions, after_start, after_end, after_start_hour, after_end_hour,
+                    "After", COLORS['after'], 'dash',
+                    data_df=fdf_ba_48h, name_suffix=" (48h)")
+            else:
+                avg_before, users_before, step01_before = plot_group(before_versions, before_start, before_end, before_start_hour, before_end_hour, "Before", COLORS['before'], 'solid')
+                avg_after, users_after, step01_after = plot_group(after_versions, after_start, after_end, after_start_hour, after_end_hour, "After", COLORS['after'], 'dash')
 
             # Lift annotations on funnel chart — every step
             # Compute significance per step
@@ -1171,8 +1258,9 @@ def main():
 
             before_ver_str = ", ".join([f"v{v}" for v in before_versions[:3]])
             after_ver_str = ", ".join([f"v{v}" for v in after_versions[:3]])
+            title_suffix = " (48h Window)" if ba_48h_mode and not fdf_ba_48h.empty else ""
             apply_chart_theme(fig_ba,
-                title=dict(text=f"FTUE Funnel: [{before_ver_str}] Before vs [{after_ver_str}] After", font=dict(size=16)),
+                title=dict(text=f"FTUE Funnel: [{before_ver_str}] Before vs [{after_ver_str}] After{title_suffix}", font=dict(size=16)),
                 xaxis_title="FTUE Steps", yaxis_title="Conversion Rate",
                 height=650, hovermode='x unified',
                 xaxis_tickangle=-45, xaxis=dict(tickfont=dict(size=9)),
