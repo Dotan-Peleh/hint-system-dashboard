@@ -75,7 +75,7 @@ first_merge AS (
   WHERE e.mp_event_name = 'merge'
     AND e.date >= CURRENT_DATE() - 90
     AND e.date <= CURRENT_DATE() - 2
-    AND e.res_timestamp <= TIMESTAMP_ADD(i.install_timestamp, INTERVAL 48 HOUR)
+    AND e.res_timestamp <= UNIX_MILLIS(i.install_timestamp) + 172800000  -- 48h in ms
   GROUP BY e.distinct_id
 ),
 
@@ -104,7 +104,7 @@ user_events AS (
   WHERE e.date >= CURRENT_DATE() - 90
     AND e.date <= CURRENT_DATE() - 2
     -- 48-HOUR OBSERVATION WINDOW: only count events within 48h of install
-    AND e.res_timestamp <= TIMESTAMP_ADD(i.install_timestamp, INTERVAL 48 HOUR)
+    AND e.res_timestamp <= UNIX_MILLIS(i.install_timestamp) + 172800000  -- 48h in ms
 ),
 
 -- Compute FTUE anchor timestamps per user (the scripted flow steps)
