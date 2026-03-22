@@ -861,15 +861,6 @@ def main():
                     'Pick versions + date ranges for each group, then compare. '
                     '<strong style="color:#5B8DEF">Blue = Before</strong> &nbsp;&nbsp;'
                     '<strong style="color:#2ECB71">Green = After</strong></div>', unsafe_allow_html=True)
-        st.markdown(
-            '<div style="background:#FFF3CD;border:1px solid #FFCD39;border-radius:8px;padding:14px 18px;margin-bottom:16px;">'
-            '<b>⚠️ IMPORTANT:</b> The After group should use <b>Min Version 0.3812</b> (not 0.3811). '
-            'v0.3812 is the only version with the Hint System baked in. '
-            'Users who installed v0.3811 after the test start are <b>late adopters</b> '
-            '(delayed app store updates, cached APKs) — they are a small, non-representative group '
-            'with a different country/device mix that drags down the average and produces misleading results. '
-            'Compare v0.3811 (Before, no hints) vs v0.3812 (After, with hints) for a clean comparison.'
-            '</div>', unsafe_allow_html=True)
 
         # =================================================================
         # BA TAB INLINE FILTERS (completely independent from sidebar)
@@ -1023,8 +1014,9 @@ def main():
                 index=after_min_idx, key="ba_after_min_ver")
             after_versions = versions_gte(after_min_ver, ba_versions_asc)
             ac1, ach1, ac2, ach2 = st.columns([2, 1, 2, 1])
-            url_asd = url_params.get('after_sd', TEST_START_DATE if TEST_START_DATE <= ba_max_date else ba_min_date)
-            url_asd = max(ba_min_date, min(ba_max_date, url_asd)) if isinstance(url_asd, date) else (TEST_START_DATE if TEST_START_DATE <= ba_max_date else ba_min_date)
+            default_after_start = max(ba_min_date, min(ba_max_date, TEST_START_DATE))
+            url_asd = url_params.get('after_sd', default_after_start)
+            url_asd = max(ba_min_date, min(ba_max_date, url_asd)) if isinstance(url_asd, date) else default_after_start
             url_aed = url_params.get('after_ed', ba_max_date)
             url_aed = max(ba_min_date, min(ba_max_date, url_aed)) if isinstance(url_aed, date) else ba_max_date
             with ac1:
