@@ -1,10 +1,10 @@
--- FTUE Funnel Analysis - 48-HOUR OBSERVATION WINDOW
--- Same as ftue_query_fix.sql but only counts events within 48 hours of install.
+-- FTUE Funnel Analysis - 72-HOUR OBSERVATION WINDOW
+-- Same as ftue_query_fix.sql but only counts events within 72 hours of install.
 -- This eliminates noise from users who return days later to continue FTUE,
 -- making before/after comparisons more apples-to-apples.
--- Uses T-2 cutoff (instead of T-1) to ensure every user has a full 48h window.
+-- Uses T-3 cutoff (instead of T-1) to ensure every user has a full 72h window.
 
-CREATE OR REPLACE TABLE peerplay.ftue_dashboard_48h
+CREATE OR REPLACE TABLE peerplay.ftue_dashboard_72h
 partition by install_date
 AS
 
@@ -61,7 +61,7 @@ installs AS (
   LEFT JOIN low_payers_countries lpc
     ON p.first_country = lpc.country_code
   WHERE p.install_date >= CURRENT_DATE() - 90
-    AND p.install_date <= CURRENT_DATE() - 2  -- T-2: need full 48h observation window
+    AND p.install_date <= CURRENT_DATE() - 3  -- T-3: need full 72h observation window
     AND p.first_country NOT IN ('IL', 'UA', 'AM')
     AND p.distinct_id NOT IN (SELECT distinct_id FROM `yotam-395120.peerplay.potential_fraudsters`)
 ),
@@ -74,8 +74,8 @@ first_merge AS (
   INNER JOIN installs i ON e.distinct_id = i.distinct_id
   WHERE e.mp_event_name = 'merge'
     AND e.date >= CURRENT_DATE() - 90
-    AND e.date <= CURRENT_DATE() - 2
-    AND e.res_timestamp <= UNIX_MILLIS(i.install_timestamp) + 172800000  -- 48h in ms
+    AND e.date <= CURRENT_DATE() - 3
+    AND e.res_timestamp <= UNIX_MILLIS(i.install_timestamp) + 259200000  -- 72h in ms
   GROUP BY e.distinct_id
 ),
 
@@ -102,9 +102,9 @@ user_events AS (
   INNER JOIN installs i ON e.distinct_id = i.distinct_id
   LEFT JOIN first_merge fm ON e.distinct_id = fm.distinct_id
   WHERE e.date >= CURRENT_DATE() - 90
-    AND e.date <= CURRENT_DATE() - 2
+    AND e.date <= CURRENT_DATE() - 3
     -- 48-HOUR OBSERVATION WINDOW: only count events within 48h of install
-    AND e.res_timestamp <= UNIX_MILLIS(i.install_timestamp) + 172800000  -- 48h in ms
+    AND e.res_timestamp <= UNIX_MILLIS(i.install_timestamp) + 259200000  -- 72h in ms
 ),
 
 -- Compute FTUE anchor timestamps per user (the scripted flow steps)

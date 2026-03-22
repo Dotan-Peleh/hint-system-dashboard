@@ -1,0 +1,7 @@
+# Ignore everything except what's needed for the build
+.git
+.gitignore
+*.sql
+deploy.sh
+__pycache__
+*.pyc
