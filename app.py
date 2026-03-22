@@ -861,6 +861,12 @@ def main():
                     'Pick versions + date ranges for each group, then compare. '
                     '<strong style="color:#5B8DEF">Blue = Before</strong> &nbsp;&nbsp;'
                     '<strong style="color:#2ECB71">Green = After</strong></div>', unsafe_allow_html=True)
+        st.markdown(
+            '<div style="background:#EBF5FB;border:1px solid #AED6F1;border-radius:8px;padding:12px 18px;margin-bottom:16px;">'
+            'The <b>Hint System</b> was enabled for all new users on '
+            '<b>March 22, 2026 at 14:00 UTC</b>. '
+            'Users who installed before this time never saw hints; users who installed after received the full hint experience.'
+            '</div>', unsafe_allow_html=True)
 
         # =================================================================
         # BA TAB INLINE FILTERS (completely independent from sidebar)
