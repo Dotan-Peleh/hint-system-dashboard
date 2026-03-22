@@ -17,8 +17,8 @@ FTUE_TABLE = f"{BQ_PROJECT}.peerplay.ftue_dashboard_fixed"
 FTUE_TABLE_72H = f"{BQ_PROJECT}.peerplay.ftue_dashboard_72h"
 RETENTION_TABLE = f"{BQ_PROJECT}.peerplay.hint_system_ab_test_results"
 
-TEST_START_DATE = date(2026, 3, 16)
-TEST_START_HOUR = 17  # 5:00 PM UTC
+TEST_START_DATE = date(2026, 3, 22)
+TEST_START_HOUR = 14  # 2:00 PM UTC
 DEFAULT_VERSION = '0.3811'
 DEFAULT_AFTER_VERSION = '0.3812'
 
