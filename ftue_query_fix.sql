@@ -58,7 +58,7 @@ installs AS (
   LEFT JOIN low_payers_countries lpc
     ON p.first_country = lpc.country_code
   WHERE p.install_date >= CURRENT_DATE() - 90
-    AND p.install_date <= CURRENT_DATE() - 1
+    AND p.install_date <= CURRENT_DATE() - 2  -- exclude yesterday to ensure full 24h observation window
     AND p.first_country NOT IN ('IL', 'UA', 'AM')
     AND p.distinct_id NOT IN (SELECT distinct_id FROM `yotam-395120.peerplay.potential_fraudsters`)
 ),
@@ -472,18 +472,16 @@ funnel_flags AS (
           AND (ue.res_timestamp - a.ts_flow3_step8_ch2) / 60000 <= 30
           THEN 1 ELSE 0 END) AS step_44,
 
-    -- Step 45: scapes_tasks_new_chapter ch3 (after flow3_step8_ch2, within 30min of flow3_step8_ch2)
+    -- Step 45: scapes_tasks_new_chapter ch3 (after flow3_step8_ch2, NO 30-min constraint — ch3 progression is gameplay, not scripted FTUE)
     MAX(CASE WHEN ue.mp_event_name = 'scapes_tasks_new_chapter' AND ue.chapter = 3
           AND a.ts_how_to_play IS NOT NULL
           AND a.ts_flow3_step8_ch2 IS NOT NULL AND ue.res_timestamp >= a.ts_flow3_step8_ch2
-          AND (ue.res_timestamp - a.ts_flow3_step8_ch2) / 60000 <= 30
           THEN 1 ELSE 0 END) AS step_45,
 
-    -- Step 46: click_harvest_collect ch3 (after flow3_step8_ch2, within 30min of flow3_step8_ch2)
+    -- Step 46: click_harvest_collect ch3 (after flow3_step8_ch2, NO 30-min constraint — ch3 progression is gameplay, not scripted FTUE)
     MAX(CASE WHEN ue.mp_event_name = 'click_harvest_collect' AND ue.chapter = 3
           AND a.ts_how_to_play IS NOT NULL
           AND a.ts_flow3_step8_ch2 IS NOT NULL AND ue.res_timestamp >= a.ts_flow3_step8_ch2
-          AND (ue.res_timestamp - a.ts_flow3_step8_ch2) / 60000 <= 30
           THEN 1 ELSE 0 END) AS step_46,
 
     -- Step 47: scapes_tasks_new_chapter ch4 (user reaches chapter 4)
