@@ -1409,10 +1409,12 @@ def main():
                         if nb > 0 and na > 0:
                             d = ra - rb
                             row['Delta'] = f"{d:+.2%}"
+                            row['Relative %'] = f"{d / rb:+.1%}" if rb > 0 else '-'
                         else:
                             row['Delta'] = '-'
+                            row['Relative %'] = '-'
                     else:
-                        row['After'] = '-'; row['Cohort After'] = '-'; row['Delta'] = '-'
+                        row['After'] = '-'; row['Cohort After'] = '-'; row['Delta'] = '-'; row['Relative %'] = '-'
                     ret_comp.append(row)
             st.dataframe(pd.DataFrame(ret_comp), use_container_width=True, hide_index=True)
 
