@@ -1392,7 +1392,7 @@ def main():
                 in_after = ver in after_versions
                 vdf_ret_b = vdf_ret[(vdf_ret['install_date'] >= before_start) & (vdf_ret['install_date'] <= before_end)] if in_before else pd.DataFrame()
                 vdf_ret_a = vdf_ret[(vdf_ret['install_date'] >= after_start) & (vdf_ret['install_date'] <= after_end)] if in_after else pd.DataFrame()
-                for rd in [1, 3, 7, 14]:
+                for rd in list(range(1, 15)):
                     row = {'Version': ver, 'Day': f'D{rd}'}
                     if not vdf_ret_b.empty:
                         rb = weighted_retention(vdf_ret_b[vdf_ret_b['days_since_install'] == rd])
@@ -2107,7 +2107,7 @@ def main():
         else:
             platforms_in_data = sorted(rdf['platform'].dropna().unique().tolist()) if 'platform' in rdf.columns else ['All']
             rv = sorted(rdf['install_version'].unique().tolist(), key=version_sort_key)
-            ret_days = [1, 3, 7, 14]
+            ret_days = list(range(1, 15))
 
             # --- Smart alerts ---
             ret_alerts = []
@@ -2248,7 +2248,7 @@ def main():
             n_ret_vers = rdf['install_version'].nunique()
             st.markdown(f'<div class="summary-box"><h4>Quick Insights</h4>'
                         f'<b>{n_ret_days}</b> days of retention data across <b>{n_ret_vers}</b> versions. '
-                        f'Select a retention day (D1/D3/D7/D14) to track.</div>', unsafe_allow_html=True)
+                        f'Select a retention day (D1–D14) to track.</div>', unsafe_allow_html=True)
 
             # --- Smart alerts ---
             daily_ret_alerts = []
@@ -2258,7 +2258,7 @@ def main():
                 daily_ret_alerts.append(('yellow', '<b>Pre-test only.</b> After the test starts, this tab will show whether daily retention is trending up or down compared to the baseline.'))
             render_alerts(daily_ret_alerts)
 
-            rds = st.selectbox("Retention day", [1, 3, 7, 14], index=0, key="daily_ret_day")
+            rds = st.selectbox("Retention day", list(range(1, 15)), index=0, key="daily_ret_day")
             recs = []
             for (dt, ver), gdf in rdf.groupby(['install_date', 'install_version']):
                 ddf = gdf[(gdf['days_since_install'] == rds) & (gdf['users_active'] > 0)]
@@ -2284,7 +2284,7 @@ def main():
                 crows = []
                 for ver in sorted(rdf['install_version'].unique().tolist(), key=version_sort_key):
                     row = {'Version': ver}
-                    for rd in [1, 3, 7, 14]:
+                    for rd in list(range(1, 15)):
                         vb = bret[(bret['install_version'] == ver) & (bret['days_since_install'] == rd)]
                         va = aret[(aret['install_version'] == ver) & (aret['days_since_install'] == rd)]
                         rb, ra = weighted_retention(vb), weighted_retention(va)
