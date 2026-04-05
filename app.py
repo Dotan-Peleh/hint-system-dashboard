@@ -15,7 +15,7 @@ from scipy.stats import chi2_contingency
 BQ_PROJECT = "yotam-395120"
 FTUE_TABLE = f"{BQ_PROJECT}.peerplay.ftue_dashboard_fixed"
 FTUE_TABLE_72H = f"{BQ_PROJECT}.peerplay.ftue_dashboard_72h"
-RETENTION_TABLE = f"{BQ_PROJECT}.peerplay.hint_system_ab_test_results"
+# Retention computed live via vmp_master_event_normalized (no pre-built table)
 
 TEST_START_DATE = date(2026, 3, 22)
 TEST_START_HOUR = 14  # 2:00 PM UTC
@@ -209,6 +209,16 @@ def load_retention_data(_client, start_date, end_date):
           AND dp.first_country NOT IN ('UA', 'IL', 'AM')
           AND dp.distinct_id NOT IN (SELECT distinct_id FROM `yotam-395120.peerplay.potential_fraudsters`)
     ),
+    daily_activity AS (
+        SELECT
+            e.distinct_id,
+            DATE(TIMESTAMP_MILLIS(CAST(e.res_timestamp AS INT64))) AS activity_date
+        FROM `yotam-395120.peerplay.vmp_master_event_normalized` e
+        INNER JOIN cohort c ON e.distinct_id = c.distinct_id
+        WHERE e.date >= '{start_date}'
+          AND e.date <= DATE_ADD(CAST('{end_date}' AS DATE), INTERVAL 91 DAY)
+        GROUP BY e.distinct_id, DATE(TIMESTAMP_MILLIS(CAST(e.res_timestamp AS INT64)))
+    ),
     days_array AS (
         SELECT day_num FROM UNNEST(GENERATE_ARRAY(0, 90)) AS day_num
     ),
@@ -226,10 +236,10 @@ def load_retention_data(_client, start_date, end_date):
         cd.is_usa,
         cd.days_since_install,
         COUNT(DISTINCT cd.distinct_id) AS cohort_size,
-        COUNT(DISTINCT apd.distinct_id) AS users_active
+        COUNT(DISTINCT da.distinct_id) AS users_active
     FROM cohort_days cd
-    LEFT JOIN `yotam-395120.peerplay.agg_player_daily` apd
-        ON cd.distinct_id = apd.distinct_id AND cd.activity_date = apd.date
+    LEFT JOIN daily_activity da
+        ON cd.distinct_id = da.distinct_id AND cd.activity_date = da.activity_date
     GROUP BY ALL
     """
     df = _client.query(query).to_dataframe()
