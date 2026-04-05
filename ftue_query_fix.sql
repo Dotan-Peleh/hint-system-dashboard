@@ -119,6 +119,9 @@ ftue_anchors AS (
     MIN(CASE WHEN mp_event_name = 'impression_ftue_flow2_step1' THEN res_timestamp END) AS ts_flow2_step1,
     MIN(CASE WHEN mp_event_name = 'impression_ftue_flow2_step2' THEN res_timestamp END) AS ts_flow2_step2,
     MIN(CASE WHEN mp_event_name = 'impression_ftue_flow2_step5' THEN res_timestamp END) AS ts_flow2_step5,
+    -- Flow 2.1 anchors (NEW - hint system finger animation between flow2 and flow3)
+    MIN(CASE WHEN mp_event_name = 'impression_ftue_flow2.1_step0' THEN res_timestamp END) AS ts_flow2_1_step0,
+    MIN(CASE WHEN mp_event_name = 'impression_ftue_flow2.1_step1' THEN res_timestamp END) AS ts_flow2_1_step1,
     -- Flow 3 anchors
     MIN(CASE WHEN mp_event_name = 'impression_ftue_flow3_step0' THEN res_timestamp END) AS ts_flow3_step0,
     MIN(CASE WHEN mp_event_name = 'impression_ftue_flow3_step6' AND chapter = 2 THEN res_timestamp END) AS ts_flow3_step6_ch2,
@@ -384,7 +387,21 @@ funnel_flags AS (
           AND (ue.res_timestamp - a.ts_flow2_step2) / 60000 <= 30
           THEN 1 ELSE 0 END) AS step_34,
 
-    -- Step 35: ftue_flow3_step0 (after how_to_play, within 30min of flow2_step5, buggy version handling)
+    -- Step 35 [NEW]: ftue_flow2.1_step0 - hint finger animation appears on board task when orange bikini is on board (after flow2_step5, within 30min of flow2_step5)
+    MAX(CASE WHEN ue.mp_event_name = 'impression_ftue_flow2.1_step0'
+          AND a.ts_how_to_play IS NOT NULL
+          AND a.ts_flow2_step5 IS NOT NULL
+          AND (ue.res_timestamp - a.ts_flow2_step5) / 60000 <= 30
+          THEN 1 ELSE 0 END) AS step_35,
+
+    -- Step 36 [NEW]: ftue_flow2.1_step1 - user clicks on the board task with finger animation (after flow2.1_step0, within 30min of flow2_step5)
+    MAX(CASE WHEN ue.mp_event_name = 'impression_ftue_flow2.1_step1'
+          AND a.ts_how_to_play IS NOT NULL
+          AND a.ts_flow2_1_step0 IS NOT NULL
+          AND (ue.res_timestamp - a.ts_flow2_step5) / 60000 <= 30
+          THEN 1 ELSE 0 END) AS step_36,
+
+    -- Step 37: ftue_flow3_step0 (after how_to_play, within 30min of flow2_step5, buggy version handling)
     MAX(CASE WHEN a.ts_how_to_play IS NOT NULL
           AND a.ts_flow2_step5 IS NOT NULL
           AND (ue.res_timestamp - a.ts_flow2_step5) / 60000 <= 30
@@ -392,17 +409,17 @@ funnel_flags AS (
             (ue.is_buggy_ftue_flow3_version AND ue.mp_event_name = 'impression_ftue_flow3_step1') OR
             (NOT ue.is_buggy_ftue_flow3_version AND ue.mp_event_name = 'impression_ftue_flow3_step0')
           )
-          THEN 1 ELSE 0 END) AS step_35,
+          THEN 1 ELSE 0 END) AS step_37,
 
-    -- Step 36: scapes_tasks_new_chapter ch2 (between flow3_step0 and flow3_step6_ch2, within 30min of flow3_step0)
+    -- Step 38: scapes_tasks_new_chapter ch2 (between flow3_step0 and flow3_step6_ch2, within 30min of flow3_step0)
     MAX(CASE WHEN ue.mp_event_name = 'scapes_tasks_new_chapter' AND ue.chapter = 2
           AND a.ts_how_to_play IS NOT NULL
           AND a.ts_flow3_step0 IS NOT NULL AND ue.res_timestamp >= a.ts_flow3_step0
           AND (ue.res_timestamp - a.ts_flow3_step0) / 60000 <= 30
           AND (a.ts_flow3_step6_ch2 IS NULL OR ue.res_timestamp <= a.ts_flow3_step6_ch2)
-          THEN 1 ELSE 0 END) AS step_36,
+          THEN 1 ELSE 0 END) AS step_38,
 
-    -- Step 37: ftue_flow3_step1 ch2 (after how_to_play, within 30min of flow3_step0, buggy version handling)
+    -- Step 39: ftue_flow3_step1 ch2 (after how_to_play, within 30min of flow3_step0, buggy version handling)
     MAX(CASE WHEN a.ts_how_to_play IS NOT NULL
           AND a.ts_flow3_step0 IS NOT NULL
           AND (ue.res_timestamp - a.ts_flow3_step0) / 60000 <= 30
@@ -410,9 +427,9 @@ funnel_flags AS (
             (ue.is_buggy_ftue_flow3_version AND ue.mp_event_name = 'impression_ftue_flow3_step2' AND ue.chapter = 2) OR
             (NOT ue.is_buggy_ftue_flow3_version AND ue.mp_event_name = 'impression_ftue_flow3_step1' AND ue.chapter = 2)
           )
-          THEN 1 ELSE 0 END) AS step_37,
+          THEN 1 ELSE 0 END) AS step_39,
 
-    -- Step 38: ftue_flow3_step2 ch2 (after how_to_play, within 30min of flow3_step0, buggy version handling)
+    -- Step 40: ftue_flow3_step2 ch2 (after how_to_play, within 30min of flow3_step0, buggy version handling)
     MAX(CASE WHEN a.ts_how_to_play IS NOT NULL
           AND a.ts_flow3_step0 IS NOT NULL
           AND (ue.res_timestamp - a.ts_flow3_step0) / 60000 <= 30
@@ -420,17 +437,17 @@ funnel_flags AS (
             (ue.is_buggy_ftue_flow3_version AND ue.mp_event_name = 'impression_ftue_flow3_step3' AND ue.chapter = 2) OR
             (NOT ue.is_buggy_ftue_flow3_version AND ue.mp_event_name = 'impression_ftue_flow3_step2' AND ue.chapter = 2)
           )
-          THEN 1 ELSE 0 END) AS step_38,
+          THEN 1 ELSE 0 END) AS step_40,
 
-    -- Step 39: click_harvest_collect ch2 (between flow3_step0 and flow3_step6_ch2, within 30min of flow3_step0)
+    -- Step 41: click_harvest_collect ch2 (between flow3_step0 and flow3_step6_ch2, within 30min of flow3_step0)
     MAX(CASE WHEN ue.mp_event_name = 'click_harvest_collect' AND ue.chapter = 2
           AND a.ts_how_to_play IS NOT NULL
           AND a.ts_flow3_step0 IS NOT NULL AND ue.res_timestamp >= a.ts_flow3_step0
           AND (ue.res_timestamp - a.ts_flow3_step0) / 60000 <= 30
           AND (a.ts_flow3_step6_ch2 IS NULL OR ue.res_timestamp <= a.ts_flow3_step6_ch2)
-          THEN 1 ELSE 0 END) AS step_39,
+          THEN 1 ELSE 0 END) AS step_41,
 
-    -- Step 40: ftue_flow3_step6 ch2 (after how_to_play, within 30min of flow3_step0, buggy version handling)
+    -- Step 42: ftue_flow3_step6 ch2 (after how_to_play, within 30min of flow3_step0, buggy version handling)
     MAX(CASE WHEN a.ts_how_to_play IS NOT NULL
           AND a.ts_flow3_step0 IS NOT NULL
           AND (ue.res_timestamp - a.ts_flow3_step0) / 60000 <= 30
@@ -438,17 +455,17 @@ funnel_flags AS (
             (ue.is_buggy_ftue_flow3_version AND ue.mp_event_name = 'impression_ftue_flow3_step7' AND ue.chapter = 2) OR
             (NOT ue.is_buggy_ftue_flow3_version AND ue.mp_event_name = 'impression_ftue_flow3_step6' AND ue.chapter = 2)
           )
-          THEN 1 ELSE 0 END) AS step_40,
+          THEN 1 ELSE 0 END) AS step_42,
 
-    -- Step 41: click_reward_center (between flow3_step6_ch2 and flow3_step8_ch2, within 30min of flow3_step6_ch2)
+    -- Step 43: click_reward_center (between flow3_step6_ch2 and flow3_step8_ch2, within 30min of flow3_step6_ch2)
     MAX(CASE WHEN ue.mp_event_name = 'click_reward_center'
           AND a.ts_how_to_play IS NOT NULL
           AND a.ts_flow3_step6_ch2 IS NOT NULL AND ue.res_timestamp >= a.ts_flow3_step6_ch2
           AND (ue.res_timestamp - a.ts_flow3_step6_ch2) / 60000 <= 30
           AND (a.ts_flow3_step8_ch2 IS NULL OR ue.res_timestamp <= a.ts_flow3_step8_ch2)
-          THEN 1 ELSE 0 END) AS step_41,
+          THEN 1 ELSE 0 END) AS step_43,
 
-    -- Step 42: ftue_flow3_step8 ch2 (after how_to_play, within 30min of flow3_step6_ch2, buggy version handling)
+    -- Step 44: ftue_flow3_step8 ch2 (after how_to_play, within 30min of flow3_step6_ch2, buggy version handling)
     MAX(CASE WHEN a.ts_how_to_play IS NOT NULL
           AND a.ts_flow3_step6_ch2 IS NOT NULL
           AND (ue.res_timestamp - a.ts_flow3_step6_ch2) / 60000 <= 30
@@ -456,49 +473,51 @@ funnel_flags AS (
             (ue.is_buggy_ftue_flow3_version AND ue.mp_event_name = 'impression_ftue_flow3_step9' AND ue.chapter = 2) OR
             (NOT ue.is_buggy_ftue_flow3_version AND ue.mp_event_name = 'impression_ftue_flow3_step8' AND ue.chapter = 2)
           )
-          THEN 1 ELSE 0 END) AS step_42,
+          THEN 1 ELSE 0 END) AS step_44,
 
-    -- Step 43: ftue_flow12_step0 (after flow3_step8_ch2, within 30min of flow3_step8_ch2)
+    -- Step 45: ftue_flow12_step0 (after flow3_step8_ch2, within 30min of flow3_step8_ch2)
     MAX(CASE WHEN ue.mp_event_name = 'impression_ftue_flow12_step0'
           AND a.ts_how_to_play IS NOT NULL
           AND a.ts_flow3_step8_ch2 IS NOT NULL AND ue.res_timestamp >= a.ts_flow3_step8_ch2
           AND (ue.res_timestamp - a.ts_flow3_step8_ch2) / 60000 <= 30
-          THEN 1 ELSE 0 END) AS step_43,
+          THEN 1 ELSE 0 END) AS step_45,
 
-    -- Step 44: ftue_flow12_step4 (after flow3_step8_ch2, within 30min of flow3_step8_ch2)
+    -- Step 46: ftue_flow12_step4 (after flow3_step8_ch2, within 30min of flow3_step8_ch2)
     MAX(CASE WHEN ue.mp_event_name = 'impression_ftue_flow12_step4'
           AND a.ts_how_to_play IS NOT NULL
           AND a.ts_flow3_step8_ch2 IS NOT NULL AND ue.res_timestamp >= a.ts_flow3_step8_ch2
           AND (ue.res_timestamp - a.ts_flow3_step8_ch2) / 60000 <= 30
-          THEN 1 ELSE 0 END) AS step_44,
+          THEN 1 ELSE 0 END) AS step_46,
 
-    -- Step 45: scapes_tasks_new_chapter ch3 (after flow3_step8_ch2, NO 30-min constraint — ch3 progression is gameplay, not scripted FTUE)
+    -- Step 47: scapes_tasks_new_chapter ch3 (after flow3_step8_ch2, NO 30-min constraint — ch3 progression is gameplay, not scripted FTUE)
     MAX(CASE WHEN ue.mp_event_name = 'scapes_tasks_new_chapter' AND ue.chapter = 3
           AND a.ts_how_to_play IS NOT NULL
           AND a.ts_flow3_step8_ch2 IS NOT NULL AND ue.res_timestamp >= a.ts_flow3_step8_ch2
-          THEN 1 ELSE 0 END) AS step_45,
+          THEN 1 ELSE 0 END) AS step_47,
 
-    -- Step 46: click_harvest_collect ch3 (after flow3_step8_ch2, NO 30-min constraint — ch3 progression is gameplay, not scripted FTUE)
+    -- Step 48: click_harvest_collect ch3 (after flow3_step8_ch2, NO 30-min constraint — ch3 progression is gameplay, not scripted FTUE)
     MAX(CASE WHEN ue.mp_event_name = 'click_harvest_collect' AND ue.chapter = 3
           AND a.ts_how_to_play IS NOT NULL
           AND a.ts_flow3_step8_ch2 IS NOT NULL AND ue.res_timestamp >= a.ts_flow3_step8_ch2
-          THEN 1 ELSE 0 END) AS step_46,
+          THEN 1 ELSE 0 END) AS step_48,
 
-    -- Step 47: scapes_tasks_new_chapter ch4 (user reaches chapter 4)
+    -- Step 49: scapes_tasks_new_chapter ch4 (user reaches chapter 4)
     MAX(CASE WHEN ue.mp_event_name = 'scapes_tasks_new_chapter' AND ue.chapter = 4
           AND a.ts_how_to_play IS NOT NULL
-          THEN 1 ELSE 0 END) AS step_47,
+          THEN 1 ELSE 0 END) AS step_49,
 
-    -- Step 48: scapes_tasks_new_chapter ch5 (user reaches chapter 5)
+    -- Step 50: scapes_tasks_new_chapter ch5 (user reaches chapter 5)
     MAX(CASE WHEN ue.mp_event_name = 'scapes_tasks_new_chapter' AND ue.chapter = 5
           AND a.ts_how_to_play IS NOT NULL
-          THEN 1 ELSE 0 END) AS step_48
+          THEN 1 ELSE 0 END) AS step_50
 
   FROM user_events ue
   LEFT JOIN ftue_anchors a ON ue.distinct_id = a.distinct_id
   GROUP BY ue.distinct_id, ue.install_date, ue.install_hour, ue.install_week, ue.install_month, ue.install_version, ue.platform, ue.country, ue.is_low_payers_country, ue.mediasource
 ),
 
+-- Enforce monotonic funnel: a user can only pass step N if they passed all prior steps.
+-- Since flags are 0/1, multiplying by all prior steps ensures this.
 -- Enforce monotonic funnel: a user can only pass step N if they passed all prior steps.
 -- Since flags are 0/1, multiplying by all prior steps ensures this.
 monotonic_flags AS (
@@ -552,7 +571,9 @@ monotonic_flags AS (
     step_45 * step_44 * step_43 * step_42 * step_41 * step_40 * step_39 * step_38 * step_37 * step_36 * step_35 * step_34 * step_33 * step_32 * step_31 * step_30 * step_29 * step_28 * step_27 * step_26 * step_25 * step_24 * step_23 * step_22 * step_21 * step_20 * step_19 * step_18 * step_17 * step_16 * step_15 * step_14 * step_13 * step_12 * step_11 * step_10 * step_09 * step_08 * step_07 * step_06 * step_05 * step_04 * step_03 * step_02 * step_01 AS step_45,
     step_46 * step_45 * step_44 * step_43 * step_42 * step_41 * step_40 * step_39 * step_38 * step_37 * step_36 * step_35 * step_34 * step_33 * step_32 * step_31 * step_30 * step_29 * step_28 * step_27 * step_26 * step_25 * step_24 * step_23 * step_22 * step_21 * step_20 * step_19 * step_18 * step_17 * step_16 * step_15 * step_14 * step_13 * step_12 * step_11 * step_10 * step_09 * step_08 * step_07 * step_06 * step_05 * step_04 * step_03 * step_02 * step_01 AS step_46,
     step_47 * step_46 * step_45 * step_44 * step_43 * step_42 * step_41 * step_40 * step_39 * step_38 * step_37 * step_36 * step_35 * step_34 * step_33 * step_32 * step_31 * step_30 * step_29 * step_28 * step_27 * step_26 * step_25 * step_24 * step_23 * step_22 * step_21 * step_20 * step_19 * step_18 * step_17 * step_16 * step_15 * step_14 * step_13 * step_12 * step_11 * step_10 * step_09 * step_08 * step_07 * step_06 * step_05 * step_04 * step_03 * step_02 * step_01 AS step_47,
-    step_48 * step_47 * step_46 * step_45 * step_44 * step_43 * step_42 * step_41 * step_40 * step_39 * step_38 * step_37 * step_36 * step_35 * step_34 * step_33 * step_32 * step_31 * step_30 * step_29 * step_28 * step_27 * step_26 * step_25 * step_24 * step_23 * step_22 * step_21 * step_20 * step_19 * step_18 * step_17 * step_16 * step_15 * step_14 * step_13 * step_12 * step_11 * step_10 * step_09 * step_08 * step_07 * step_06 * step_05 * step_04 * step_03 * step_02 * step_01 AS step_48
+    step_48 * step_47 * step_46 * step_45 * step_44 * step_43 * step_42 * step_41 * step_40 * step_39 * step_38 * step_37 * step_36 * step_35 * step_34 * step_33 * step_32 * step_31 * step_30 * step_29 * step_28 * step_27 * step_26 * step_25 * step_24 * step_23 * step_22 * step_21 * step_20 * step_19 * step_18 * step_17 * step_16 * step_15 * step_14 * step_13 * step_12 * step_11 * step_10 * step_09 * step_08 * step_07 * step_06 * step_05 * step_04 * step_03 * step_02 * step_01 AS step_48,
+    step_49 * step_48 * step_47 * step_46 * step_45 * step_44 * step_43 * step_42 * step_41 * step_40 * step_39 * step_38 * step_37 * step_36 * step_35 * step_34 * step_33 * step_32 * step_31 * step_30 * step_29 * step_28 * step_27 * step_26 * step_25 * step_24 * step_23 * step_22 * step_21 * step_20 * step_19 * step_18 * step_17 * step_16 * step_15 * step_14 * step_13 * step_12 * step_11 * step_10 * step_09 * step_08 * step_07 * step_06 * step_05 * step_04 * step_03 * step_02 * step_01 AS step_49,
+    step_50 * step_49 * step_48 * step_47 * step_46 * step_45 * step_44 * step_43 * step_42 * step_41 * step_40 * step_39 * step_38 * step_37 * step_36 * step_35 * step_34 * step_33 * step_32 * step_31 * step_30 * step_29 * step_28 * step_27 * step_26 * step_25 * step_24 * step_23 * step_22 * step_21 * step_20 * step_19 * step_18 * step_17 * step_16 * step_15 * step_14 * step_13 * step_12 * step_11 * step_10 * step_09 * step_08 * step_07 * step_06 * step_05 * step_04 * step_03 * step_02 * step_01 AS step_50
   FROM funnel_flags
 ),
 
@@ -569,22 +590,56 @@ version_aggregates AS (
     is_low_payers_country,
     mediasource,
     COUNT(DISTINCT distinct_id) AS total_users,
-    SUM(step_01) AS step_01, SUM(step_02) AS step_02, SUM(step_03) AS step_03,
-    SUM(step_04) AS step_04, SUM(step_05) AS step_05, SUM(step_06) AS step_06,
-    SUM(step_07) AS step_07, SUM(step_08) AS step_08, SUM(step_09) AS step_09,
-    SUM(step_10) AS step_10, SUM(step_11) AS step_11, SUM(step_12) AS step_12,
-    SUM(step_13) AS step_13, SUM(step_14) AS step_14, SUM(step_15) AS step_15,
-    SUM(step_16) AS step_16, SUM(step_17) AS step_17, SUM(step_18) AS step_18,
-    SUM(step_19) AS step_19, SUM(step_20) AS step_20, SUM(step_21) AS step_21,
-    SUM(step_22) AS step_22, SUM(step_23) AS step_23, SUM(step_24) AS step_24,
-    SUM(step_25) AS step_25, SUM(step_26) AS step_26, SUM(step_27) AS step_27,
-    SUM(step_28) AS step_28, SUM(step_29) AS step_29, SUM(step_30) AS step_30,
-    SUM(step_31) AS step_31, SUM(step_32) AS step_32, SUM(step_33) AS step_33,
-    SUM(step_34) AS step_34, SUM(step_35) AS step_35, SUM(step_36) AS step_36,
-    SUM(step_37) AS step_37, SUM(step_38) AS step_38, SUM(step_39) AS step_39,
-    SUM(step_40) AS step_40, SUM(step_41) AS step_41, SUM(step_42) AS step_42,
-    SUM(step_43) AS step_43, SUM(step_44) AS step_44, SUM(step_45) AS step_45,
-    SUM(step_46) AS step_46, SUM(step_47) AS step_47, SUM(step_48) AS step_48
+    SUM(step_01) AS step_01,
+    SUM(step_02) AS step_02,
+    SUM(step_03) AS step_03,
+    SUM(step_04) AS step_04,
+    SUM(step_05) AS step_05,
+    SUM(step_06) AS step_06,
+    SUM(step_07) AS step_07,
+    SUM(step_08) AS step_08,
+    SUM(step_09) AS step_09,
+    SUM(step_10) AS step_10,
+    SUM(step_11) AS step_11,
+    SUM(step_12) AS step_12,
+    SUM(step_13) AS step_13,
+    SUM(step_14) AS step_14,
+    SUM(step_15) AS step_15,
+    SUM(step_16) AS step_16,
+    SUM(step_17) AS step_17,
+    SUM(step_18) AS step_18,
+    SUM(step_19) AS step_19,
+    SUM(step_20) AS step_20,
+    SUM(step_21) AS step_21,
+    SUM(step_22) AS step_22,
+    SUM(step_23) AS step_23,
+    SUM(step_24) AS step_24,
+    SUM(step_25) AS step_25,
+    SUM(step_26) AS step_26,
+    SUM(step_27) AS step_27,
+    SUM(step_28) AS step_28,
+    SUM(step_29) AS step_29,
+    SUM(step_30) AS step_30,
+    SUM(step_31) AS step_31,
+    SUM(step_32) AS step_32,
+    SUM(step_33) AS step_33,
+    SUM(step_34) AS step_34,
+    SUM(step_35) AS step_35,
+    SUM(step_36) AS step_36,
+    SUM(step_37) AS step_37,
+    SUM(step_38) AS step_38,
+    SUM(step_39) AS step_39,
+    SUM(step_40) AS step_40,
+    SUM(step_41) AS step_41,
+    SUM(step_42) AS step_42,
+    SUM(step_43) AS step_43,
+    SUM(step_44) AS step_44,
+    SUM(step_45) AS step_45,
+    SUM(step_46) AS step_46,
+    SUM(step_47) AS step_47,
+    SUM(step_48) AS step_48,
+    SUM(step_49) AS step_49,
+    SUM(step_50) AS step_50
   FROM monotonic_flags
   GROUP BY install_date, install_hour, install_week, install_month, install_version, platform, country, is_low_payers_country, mediasource
 )
@@ -631,20 +686,20 @@ SELECT
   ROUND(step_32 / NULLIF(step_01, 0), 4) AS pct_32_ftue_flow2_step2,
   ROUND(step_33 / NULLIF(step_01, 0), 4) AS pct_33_ship_animation,
   ROUND(step_34 / NULLIF(step_01, 0), 4) AS pct_34_ftue_flow2_step5,
-  ROUND(step_35 / NULLIF(step_01, 0), 4) AS pct_35_ftue_flow3_step0,
-  ROUND(step_36 / NULLIF(step_01, 0), 4) AS pct_36_new_chapter_2,
-  ROUND(step_37 / NULLIF(step_01, 0), 4) AS pct_37_ftue_flow3_step1_ch2,
-  ROUND(step_38 / NULLIF(step_01, 0), 4) AS pct_38_ftue_flow3_step2_ch2,
-  ROUND(step_39 / NULLIF(step_01, 0), 4) AS pct_39_click_harvest_collect_ch2,
-  ROUND(step_40 / NULLIF(step_01, 0), 4) AS pct_40_ftue_flow3_step6_ch2,
-  ROUND(step_41 / NULLIF(step_01, 0), 4) AS pct_41_click_reward_center,
-  ROUND(step_42 / NULLIF(step_01, 0), 4) AS pct_42_ftue_flow3_step8_ch2,
-  ROUND(step_43 / NULLIF(step_01, 0), 4) AS pct_43_ftue_flow12_step0,
-  ROUND(step_44 / NULLIF(step_01, 0), 4) AS pct_44_ftue_flow12_step4,
-  ROUND(step_45 / NULLIF(step_01, 0), 4) AS pct_45_new_chapter_3,
-  ROUND(step_46 / NULLIF(step_01, 0), 4) AS pct_46_click_harvest_collect_ch3,
-  ROUND(step_47 / NULLIF(step_01, 0), 4) AS pct_47_new_chapter_4,
-  ROUND(step_48 / NULLIF(step_01, 0), 4) AS pct_48_new_chapter_5,
+  ROUND(step_35 / NULLIF(step_01, 0), 4) AS pct_37_ftue_flow3_step0,
+  ROUND(step_36 / NULLIF(step_01, 0), 4) AS pct_38_new_chapter_2,
+  ROUND(step_37 / NULLIF(step_01, 0), 4) AS pct_39_ftue_flow3_step1_ch2,
+  ROUND(step_38 / NULLIF(step_01, 0), 4) AS pct_40_ftue_flow3_step2_ch2,
+  ROUND(step_39 / NULLIF(step_01, 0), 4) AS pct_41_click_harvest_collect_ch2,
+  ROUND(step_40 / NULLIF(step_01, 0), 4) AS pct_42_ftue_flow3_step6_ch2,
+  ROUND(step_41 / NULLIF(step_01, 0), 4) AS pct_43_click_reward_center,
+  ROUND(step_42 / NULLIF(step_01, 0), 4) AS pct_44_ftue_flow3_step8_ch2,
+  ROUND(step_43 / NULLIF(step_01, 0), 4) AS pct_45_ftue_flow12_step0,
+  ROUND(step_44 / NULLIF(step_01, 0), 4) AS pct_46_ftue_flow12_step4,
+  ROUND(step_45 / NULLIF(step_01, 0), 4) AS pct_47_new_chapter_3,
+  ROUND(step_46 / NULLIF(step_01, 0), 4) AS pct_48_click_harvest_collect_ch3,
+  ROUND(step_47 / NULLIF(step_01, 0), 4) AS pct_49_new_chapter_4,
+  ROUND(step_48 / NULLIF(step_01, 0), 4) AS pct_50_new_chapter_5,
 
   -- Step-to-step conversion rates
   1.0 AS ratio_01_to_prev,
@@ -681,20 +736,20 @@ SELECT
   ROUND(step_32 / NULLIF(step_31, 0), 4) AS ratio_32_to_31,
   ROUND(step_33 / NULLIF(step_32, 0), 4) AS ratio_33_to_32,
   ROUND(step_34 / NULLIF(step_33, 0), 4) AS ratio_34_to_33,
-  ROUND(step_35 / NULLIF(step_34, 0), 4) AS ratio_35_to_34,
-  ROUND(step_36 / NULLIF(step_35, 0), 4) AS ratio_36_to_35,
-  ROUND(step_37 / NULLIF(step_36, 0), 4) AS ratio_37_to_36,
-  ROUND(step_38 / NULLIF(step_37, 0), 4) AS ratio_38_to_37,
-  ROUND(step_39 / NULLIF(step_38, 0), 4) AS ratio_39_to_38,
-  ROUND(step_40 / NULLIF(step_39, 0), 4) AS ratio_40_to_39,
-  ROUND(step_41 / NULLIF(step_40, 0), 4) AS ratio_41_to_40,
-  ROUND(step_42 / NULLIF(step_41, 0), 4) AS ratio_42_to_41,
-  ROUND(step_43 / NULLIF(step_42, 0), 4) AS ratio_43_to_42,
-  ROUND(step_44 / NULLIF(step_43, 0), 4) AS ratio_44_to_43,
-  ROUND(step_45 / NULLIF(step_44, 0), 4) AS ratio_45_to_44,
-  ROUND(step_46 / NULLIF(step_45, 0), 4) AS ratio_46_to_45,
-  ROUND(step_47 / NULLIF(step_46, 0), 4) AS ratio_47_to_46,
-  ROUND(step_48 / NULLIF(step_47, 0), 4) AS ratio_48_to_47
+  ROUND(step_35 / NULLIF(step_34, 0), 4) AS ratio_37_to_34,
+  ROUND(step_36 / NULLIF(step_35, 0), 4) AS ratio_38_to_35,
+  ROUND(step_37 / NULLIF(step_36, 0), 4) AS ratio_39_to_36,
+  ROUND(step_38 / NULLIF(step_37, 0), 4) AS ratio_40_to_37,
+  ROUND(step_39 / NULLIF(step_38, 0), 4) AS ratio_41_to_38,
+  ROUND(step_40 / NULLIF(step_39, 0), 4) AS ratio_42_to_39,
+  ROUND(step_41 / NULLIF(step_40, 0), 4) AS ratio_43_to_40,
+  ROUND(step_42 / NULLIF(step_41, 0), 4) AS ratio_44_to_41,
+  ROUND(step_43 / NULLIF(step_42, 0), 4) AS ratio_45_to_42,
+  ROUND(step_44 / NULLIF(step_43, 0), 4) AS ratio_46_to_43,
+  ROUND(step_45 / NULLIF(step_44, 0), 4) AS ratio_47_to_44,
+  ROUND(step_46 / NULLIF(step_45, 0), 4) AS ratio_48_to_45,
+  ROUND(step_47 / NULLIF(step_46, 0), 4) AS ratio_49_to_46,
+  ROUND(step_48 / NULLIF(step_47, 0), 4) AS ratio_50_to_47
 
 FROM version_aggregates v
 LEFT JOIN media_type_mapping m ON v.mediasource = m.mediasource

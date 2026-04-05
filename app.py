@@ -241,7 +241,7 @@ def load_retention_data(_client, start_date, end_date):
 # HELPERS
 # =============================================================================
 
-CH4_CH5_SUFFIXES = ('_47_new_chapter_4', '_48_new_chapter_5', '_47_to_46', '_48_to_47')
+CH4_CH5_SUFFIXES = ('_49_new_chapter_4', '_50_new_chapter_5', '_49_to_48', '_50_to_49')
 
 def get_pct_columns(df):
     cols = sorted([c for c in df.columns if c.startswith('pct_')])
@@ -1590,20 +1590,22 @@ def main():
                     {"Step": "32: ftue_flow2_step2", "Event": "impression_ftue_flow2_step2", "Description": "FTUE Flow 2 step 2"},
                     {"Step": "33: ship_animation", "Event": "impression_ship_animation_started", "Description": "Ship animation plays — chapter completion"},
                     {"Step": "34: ftue_flow2_step5", "Event": "impression_ftue_flow2_step5", "Description": "FTUE Flow 2 step 5 — end of Flow 2"},
-                    {"Step": "35: ftue_flow3_step0", "Event": "impression_ftue_flow3_step0", "Description": "FTUE Flow 3 begins — chapter 2 tutorial"},
-                    {"Step": "36: new_chapter_2", "Event": "scapes_tasks_new_chapter", "Description": "User reaches chapter 2"},
-                    {"Step": "37: ftue_flow3_step1_ch2", "Event": "impression_ftue_flow3_step1", "Description": "FTUE Flow 3 step 1 (chapter 2)"},
-                    {"Step": "38: ftue_flow3_step2_ch2", "Event": "impression_ftue_flow3_step2", "Description": "FTUE Flow 3 step 2 (chapter 2)"},
-                    {"Step": "39: click_harvest_collect_ch2", "Event": "click_harvest_collect", "Description": "User collects harvest reward (chapter 2)"},
-                    {"Step": "40: ftue_flow3_step6_ch2", "Event": "impression_ftue_flow3_step6", "Description": "FTUE Flow 3 step 6 (chapter 2)"},
-                    {"Step": "41: click_reward_center", "Event": "click_reward_center", "Description": "User opens the reward center"},
-                    {"Step": "42: ftue_flow3_step8_ch2", "Event": "impression_ftue_flow3_step8", "Description": "FTUE Flow 3 step 8 — end of chapter 2 tutorial"},
-                    {"Step": "43: ftue_flow12_step0", "Event": "impression_ftue_flow12_step0", "Description": "FTUE Flow 12 begins — hint system intro"},
-                    {"Step": "44: ftue_flow12_step4", "Event": "impression_ftue_flow12_step4", "Description": "FTUE Flow 12 step 4 — hint system completion"},
-                    {"Step": "45: new_chapter_3", "Event": "scapes_tasks_new_chapter", "Description": "User reaches chapter 3"},
-                    {"Step": "46: click_harvest_collect_ch3", "Event": "click_harvest_collect", "Description": "User collects harvest reward (chapter 3)"},
-                    {"Step": "47: new_chapter_4", "Event": "scapes_tasks_new_chapter", "Description": "User reaches chapter 4"},
-                    {"Step": "48: new_chapter_5", "Event": "scapes_tasks_new_chapter", "Description": "User reaches chapter 5"},
+                    {"Step": "35: ftue_flow2.1_step0 [NEW]", "Event": "impression_ftue_flow2.1_step0", "Description": "Hint finger animation appears on board task when orange bikini is on board"},
+                    {"Step": "36: ftue_flow2.1_step1 [NEW]", "Event": "impression_ftue_flow2.1_step1", "Description": "User clicks on the board task with finger animation"},
+                    {"Step": "37: ftue_flow3_step0", "Event": "impression_ftue_flow3_step0", "Description": "FTUE Flow 3 begins — chapter 2 tutorial"},
+                    {"Step": "38: new_chapter_2", "Event": "scapes_tasks_new_chapter", "Description": "User reaches chapter 2"},
+                    {"Step": "39: ftue_flow3_step1_ch2", "Event": "impression_ftue_flow3_step1", "Description": "FTUE Flow 3 step 1 (chapter 2)"},
+                    {"Step": "40: ftue_flow3_step2_ch2", "Event": "impression_ftue_flow3_step2", "Description": "FTUE Flow 3 step 2 (chapter 2)"},
+                    {"Step": "41: click_harvest_collect_ch2", "Event": "click_harvest_collect", "Description": "User collects harvest reward (chapter 2)"},
+                    {"Step": "42: ftue_flow3_step6_ch2", "Event": "impression_ftue_flow3_step6", "Description": "FTUE Flow 3 step 6 (chapter 2)"},
+                    {"Step": "43: click_reward_center", "Event": "click_reward_center", "Description": "User opens the reward center"},
+                    {"Step": "44: ftue_flow3_step8_ch2", "Event": "impression_ftue_flow3_step8", "Description": "FTUE Flow 3 step 8 — end of chapter 2 tutorial"},
+                    {"Step": "45: ftue_flow12_step0", "Event": "impression_ftue_flow12_step0", "Description": "FTUE Flow 12 begins — hint system intro"},
+                    {"Step": "46: ftue_flow12_step4", "Event": "impression_ftue_flow12_step4", "Description": "FTUE Flow 12 step 4 — hint system completion"},
+                    {"Step": "47: new_chapter_3", "Event": "scapes_tasks_new_chapter", "Description": "User reaches chapter 3"},
+                    {"Step": "48: click_harvest_collect_ch3", "Event": "click_harvest_collect", "Description": "User collects harvest reward (chapter 3)"},
+                    {"Step": "49: new_chapter_4", "Event": "scapes_tasks_new_chapter", "Description": "User reaches chapter 4"},
+                    {"Step": "50: new_chapter_5", "Event": "scapes_tasks_new_chapter", "Description": "User reaches chapter 5"},
                 ]
                 st.dataframe(pd.DataFrame(step_reference), use_container_width=True, hide_index=True, height=400)
 
