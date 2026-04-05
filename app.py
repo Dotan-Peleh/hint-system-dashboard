@@ -1196,9 +1196,17 @@ def main():
                                 for i in range(len(active_labels))]
                     ver_label = f"{len(group_all_vals)} versions"
                 agg_vals = enforce_monotonic(agg_vals)
+                # For hint steps (35-36): if value is 0, replace with None so the line
+                # skips those points instead of dipping to zero. This makes the Before
+                # line (old version without hint steps) connect cleanly from step 34 to 37.
+                plot_vals = list(agg_vals)
+                plot_labels = list(active_labels)
+                for idx, lbl in enumerate(plot_labels):
+                    if ('flow2_1_step0' in lbl or 'flow2_1_step1' in lbl) and plot_vals[idx] == 0:
+                        plot_vals[idx] = None
                 # Plot single aggregated line per group
                 fig_ba.add_trace(go.Scatter(
-                    x=active_labels, y=agg_vals,
+                    x=plot_labels, y=plot_vals,
                     mode='lines+markers',
                     name=f"{period_label} ({ver_label}, {total_u:,.0f})",
                     line=dict(color=base_color, width=3,
@@ -1206,6 +1214,7 @@ def main():
                     marker=dict(size=7, symbol='circle' if period_label == 'Before' else 'diamond',
                                 line=dict(width=1.5, color='white')),
                     hovertemplate='<b>%{x}</b><br>' + period_label + f' ({ver_label}, {total_u:,.0f})' + ': %{y:.4f}<extra></extra>',
+                    connectgaps=True,
                     legendgroup=period_label,
                 ))
                 return agg_vals, total_u, total_s01
@@ -1273,7 +1282,14 @@ def main():
 
             # --- Summary metrics ---
             if avg_before and avg_after:
-                lifts_all = [(avg_after[i] - avg_before[i]) * 100 for i in range(len(avg_before))]
+                lifts_all_raw = []
+                for i in range(len(avg_before)):
+                    lbl = active_labels[i]
+                    is_hint = 'flow2_1_step0' in lbl or 'flow2_1_step1' in lbl
+                    if is_hint and avg_before[i] == 0:
+                        continue  # Skip new steps from summary metrics
+                    lifts_all_raw.append((avg_after[i] - avg_before[i]) * 100)
+                lifts_all = lifts_all_raw
                 improved = [l for l in lifts_all if l > 0.5]
                 declined = [l for l in lifts_all if l < -0.5]
                 sig_count = sum(1 for s in sig_results if s[1]) if sig_results else 0
@@ -1292,8 +1308,15 @@ def main():
                             '<strong style="color:#E74C3C">Red bars</strong> = After is lower (regression) &nbsp;&nbsp;'
                             'The <b>dashed line</b> shows the average lift across all steps.'
                             '</div>', unsafe_allow_html=True)
-                lifts_per_step = [(avg_after[i] - avg_before[i]) * 100 for i in range(len(avg_before))]
-                bar_colors = [COLORS['after'] if l > 0.1 else COLORS['negative'] if l < -0.1 else COLORS['neutral'] for l in lifts_per_step]
+                lifts_per_step = []
+                for i in range(len(avg_before)):
+                    lbl = active_labels[i]
+                    is_hint = 'flow2_1_step0' in lbl or 'flow2_1_step1' in lbl
+                    if is_hint and avg_before[i] == 0:
+                        lifts_per_step.append(None)  # Skip new steps in lift chart
+                    else:
+                        lifts_per_step.append((avg_after[i] - avg_before[i]) * 100)
+                bar_colors = [COLORS['after'] if l and l > 0.1 else COLORS['negative'] if l and l < -0.1 else COLORS['neutral'] for l in lifts_per_step]
                 fig_lift = go.Figure()
                 fig_lift.add_trace(go.Bar(
                     x=active_labels, y=lifts_per_step,
@@ -1325,10 +1348,19 @@ def main():
                         unsafe_allow_html=True)
             detail_rows = []
             for i in range(len(active_labels)):
-                row = {'Step': active_labels[i]}
-                row['Before'] = f"{avg_before[i]:.4f}" if avg_before else '-'
-                row['After'] = f"{avg_after[i]:.4f}" if avg_after else '-'
-                if avg_before and avg_after and avg_before[i] > 0:
+                lbl = active_labels[i]
+                is_hint_step = 'flow2_1_step0' in lbl or 'flow2_1_step1' in lbl
+                row = {'Step': lbl}
+                if is_hint_step and avg_before and avg_before[i] == 0:
+                    row['Before'] = 'N/A (new step)'
+                    row['After'] = f"{avg_after[i]:.4f}" if avg_after else '-'
+                    row['Delta'] = 'NEW'
+                    row['Lift (pp)'] = 'NEW'
+                    row['p-value'] = '-'
+                    row['Significant'] = '-'
+                elif avg_before and avg_after and avg_before[i] > 0:
+                    row['Before'] = f"{avg_before[i]:.4f}"
+                    row['After'] = f"{avg_after[i]:.4f}"
                     lift_pp = (avg_after[i] - avg_before[i]) * 100
                     delta_abs = avg_after[i] - avg_before[i]
                     row['Delta'] = f"{delta_abs:+.4f}"
@@ -1341,6 +1373,8 @@ def main():
                         row['p-value'] = '-'
                         row['Significant'] = '-'
                 else:
+                    row['Before'] = f"{avg_before[i]:.4f}" if avg_before else '-'
+                    row['After'] = f"{avg_after[i]:.4f}" if avg_after else '-'
                     row['Delta'] = '-'
                     row['Lift (pp)'] = '-'
                     row['p-value'] = '-'
