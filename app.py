@@ -242,17 +242,22 @@ def load_retention_data(_client, start_date, end_date):
 # =============================================================================
 
 CH4_CH5_SUFFIXES = ('_49_new_chapter_4', '_50_new_chapter_5', '_49_to_48', '_50_to_49')
+HINT_STEP_SUFFIXES = ('_35_ftue_flow2_1_step0_NEW', '_36_ftue_flow2_1_step1_NEW', '_35_to_34', '_36_to_35')
 
 def get_pct_columns(df):
     cols = sorted([c for c in df.columns if c.startswith('pct_')])
     if not st.session_state.get('include_ch4_ch5', False):
         cols = [c for c in cols if not c.endswith(CH4_CH5_SUFFIXES)]
+    if not st.session_state.get('include_hint_steps', False):
+        cols = [c for c in cols if not c.endswith(HINT_STEP_SUFFIXES)]
     return cols
 
 def get_ratio_columns(df):
     cols = sorted([c for c in df.columns if c.startswith('ratio_')])
     if not st.session_state.get('include_ch4_ch5', False):
         cols = [c for c in cols if not c.endswith(CH4_CH5_SUFFIXES)]
+    if not st.session_state.get('include_hint_steps', False):
+        cols = [c for c in cols if not c.endswith(HINT_STEP_SUFFIXES)]
     return cols
 
 def format_step_label(col):
@@ -459,6 +464,8 @@ def parse_url_params():
             params['low_payers'] = val
     if 'ch45' in qp:
         params['ch45'] = qp['ch45'] == '1'
+    if 'hint' in qp:
+        params['hint'] = qp['hint'] == '1'
     # Before/After tab params
     if 'tab' in qp:
         params['tab'] = qp['tab']
@@ -521,6 +528,8 @@ def update_url_params(**kwargs):
         qp['low_payers'] = kwargs['low_payers']
     if kwargs.get('ch45'):
         qp['ch45'] = '1'
+    if kwargs.get('hint'):
+        qp['hint'] = '1'
     st.query_params.clear()
     st.query_params.update(qp)
 
@@ -714,6 +723,7 @@ def main():
             media_type=[str(m) for m in selected_media_type] if selected_media_type else None,
             low_payers=sel_lp if sel_lp != "All" else None,
             ch45=st.session_state.get('include_ch4_ch5', False),
+            hint=st.session_state.get('include_hint_steps', False),
         )
 
     # =========================================================================
@@ -1054,6 +1064,7 @@ def main():
             ba_metric_set = st.selectbox("Metric set", ba_metric_options, index=url_ba_metric_idx, key="ba_metric_set")
         with opt2:
             st.checkbox("Include Ch 4 & 5", value=url_params.get('ch45', False), key="include_ch4_ch5")
+            st.checkbox("Include Hint Steps (flow 2.1) [NEW]", value=url_params.get('hint', False), key="include_hint_steps")
         with opt2b:
             ba_72h_mode = st.checkbox("72h Observation Window", value=url_params.get('ba_72h', False), key="ba_72h_window",
                                       help="Only count FTUE events within 72 hours of install for a cleaner before/after comparison.")
@@ -1075,6 +1086,8 @@ def main():
                 ba_params['ba_metric'] = 'ratio'
             if st.session_state.get('include_ch4_ch5', False):
                 ba_params['ch45'] = '1'
+            if st.session_state.get('include_hint_steps', False):
+                ba_params['hint'] = '1'
             if st.session_state.get('ba_72h_window', False):
                 ba_params['ba_72h'] = '1'
             if ba_selected_platforms and ba_plat_opts and set(ba_selected_platforms) != set(ba_plat_opts):
